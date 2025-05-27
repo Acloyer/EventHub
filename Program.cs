@@ -1,5 +1,6 @@
 ﻿using EventHub.Data;
 using EventHub.Models;
+using EventHub.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -64,8 +65,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
+// 1.6 Telegram Bot API
+builder.Services.AddHttpClient();
+builder.Services.AddHostedService<NotificationHostedService>();
+
 
 // ─── 2) Строим приложение и задаём Pipeline ──────────────────────────────
+
 
 var app = builder.Build();
 

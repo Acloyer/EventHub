@@ -12,21 +12,22 @@ namespace EventHub.Controllers
     [Authorize]
     public class UserController : ControllerBase
     {
+        private readonly EventHubDbContext _db;
+        public UserController(EventHubDbContext db) => _db = db;
+
+        // Вспомогательный метод получения userId из токена
         private int GetUserId()
         {
             var sub = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-                   ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (sub == null)
-                throw new Exception("User ID not found in token");
+                   ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                   ?? throw new Exception("User ID not found in token");
 
             return int.Parse(sub);
         }
 
-        private readonly EventHubDbContext _db;
-        public UserController(EventHubDbContext db) => _db = db;
+        // ==== Профиль ====
 
-        // GET: api/User/Profile
+        // GET api/User/Profile
         [HttpGet("Profile")]
         public async Task<IActionResult> GetProfile()
         {
@@ -43,11 +44,15 @@ namespace EventHub.Controllers
             {
                 user.Id,
                 user.Email,
-                Roles = user.UserRoles.Select(ur => ur.Role.Name)
+                Roles = user.UserRoles.Select(ur => ur.Role.Name),
+                user.TelegramId,
+                user.NotifyBeforeEvent
             });
         }
 
-        // GET: api/User/CreatedEvents
+        // ==== Созданные, избранные, запланированные ====
+
+        // GET api/User/CreatedEvents
         [HttpGet("CreatedEvents")]
         public async Task<IActionResult> GetCreatedEvents()
         {
@@ -60,7 +65,7 @@ namespace EventHub.Controllers
             return Ok(events);
         }
 
-        // GET: api/User/Favorites
+        // GET api/User/Favorites
         [HttpGet("Favorites")]
         public async Task<IActionResult> GetFavorites()
         {
@@ -75,7 +80,7 @@ namespace EventHub.Controllers
             return Ok(favorites);
         }
 
-        // GET: api/User/Planned
+        // GET api/User/Planned
         [HttpGet("Planned")]
         public async Task<IActionResult> GetPlanned()
         {
@@ -88,6 +93,34 @@ namespace EventHub.Controllers
                 .ToListAsync();
 
             return Ok(planned);
+        }
+
+        // ==== Telegram-привязка и уведомления ====
+
+        // POST api/User/link-telegram/{telegramId}
+        [HttpPost("link-telegram/{telegramId}")]
+        public async Task<IActionResult> LinkTelegram(string telegramId)
+        {
+            int userId = GetUserId();
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            user.TelegramId = telegramId;
+            await _db.SaveChangesAsync();
+            return Ok("Telegram linked successfully");
+        }
+
+        // POST api/User/set-notify
+        [HttpPost("set-notify")]
+        public async Task<IActionResult> SetNotificationPreference([FromBody] bool notify)
+        {
+            int userId = GetUserId();
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            user.NotifyBeforeEvent = notify;
+            await _db.SaveChangesAsync();
+            return Ok(new { notify });
         }
     }
 }

@@ -19,9 +19,10 @@ namespace EventHub.Data
         public EventHubDbContext(DbContextOptions opts) : base(opts) { }
         protected override void OnModelCreating(ModelBuilder model)
         {
+            model.Entity<User>().Property(u => u.TelegramId);
+
             model.Entity<UserRole>()
                 .HasKey(ur => new { ur.UserId, ur.RoleId });
-
             model.Entity<PostReaction>()
                 .HasKey(pr => pr.Id);
 
