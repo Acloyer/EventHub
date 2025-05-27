@@ -18,7 +18,7 @@ namespace EventHub.Controllers
 
         // GET: api/Event
         [HttpGet]
-        [AllowAnonymous] // любой может смотреть список
+        [AllowAnonymous]
         public async Task<IActionResult> GetAll()
         {
             var events = await _db.Events
@@ -35,14 +35,15 @@ namespace EventHub.Controllers
             return Ok(events);
         }
 
-        // GET: api/Event/5
-        [HttpGet("{id}")]
+        // GET: api/Event/by-id/5
+        [HttpGet("by-id/{id}")]
         [AllowAnonymous]
-        public async Task<IActionResult> Get(int id)
+        public async Task<IActionResult> GetById(int id)
         {
             var ev = await _db.Events
                               .Include(e => e.Organizer)
                               .FirstOrDefaultAsync(e => e.Id == id);
+
             if (ev == null) return NotFound();
             return Ok(new
             {
@@ -60,12 +61,14 @@ namespace EventHub.Controllers
         [Authorize(Roles = "Admin,Organizer")]
         public async Task<IActionResult> Create([FromBody] EventDto dto)
         {
-            // получим текущего пользователя из токена
             var subClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-               ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (subClaim == null)
-                return Unauthorized();   // или BadRequest()
+                return Unauthorized();
+
             var userId = int.Parse(subClaim);
+            var user = await _db.Users.FindAsync(userId);
+            if (user == null) return Unauthorized();
 
             var ev = new Event
             {
@@ -73,11 +76,13 @@ namespace EventHub.Controllers
                 Description = dto.Description,
                 StartTime = dto.StartTime,
                 EndTime = dto.EndTime,
-                OrganizerId = userId
+                Organizer = user
             };
+
             _db.Events.Add(ev);
             await _db.SaveChangesAsync();
-            return CreatedAtAction(nameof(Get), new { id = ev.Id }, ev);
+
+            return CreatedAtAction(nameof(GetById), new { id = ev.Id }, ev);
         }
 
         // PUT: api/Event/5
@@ -88,7 +93,6 @@ namespace EventHub.Controllers
             var ev = await _db.Events.FindAsync(id);
             if (ev == null) return NotFound();
 
-            // если не админ — проверяем что организатор совпадает
             if (!User.IsInRole("Admin") && ev.OrganizerId != int.Parse(User.FindFirst("sub")!.Value))
                 return Forbid();
 

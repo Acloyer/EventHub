@@ -3,6 +3,7 @@ using System;
 using EventHub.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EventHub.Migrations
 {
     [DbContext(typeof(EventHubDbContext))]
-    partial class EventHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250527095309_AddFavoritesAndPlannedEvents")]
+    partial class AddFavoritesAndPlannedEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -178,7 +181,7 @@ namespace EventHub.Migrations
             modelBuilder.Entity("EventHub.Models.Event", b =>
                 {
                     b.HasOne("EventHub.Models.User", "Organizer")
-                        .WithMany("CreatedEvents")
+                        .WithMany()
                         .HasForeignKey("OrganizerId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -245,8 +248,6 @@ namespace EventHub.Migrations
 
             modelBuilder.Entity("EventHub.Models.User", b =>
                 {
-                    b.Navigation("CreatedEvents");
-
                     b.Navigation("FavoriteEvents");
 
                     b.Navigation("PlannedEvents");

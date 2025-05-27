@@ -10,5 +10,8 @@ namespace EventHub.Models
 
         // Навигационное свойство
         public List<UserRole> UserRoles { get; set; }
+        public ICollection<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
+        public ICollection<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
+        public ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
     }
 }
