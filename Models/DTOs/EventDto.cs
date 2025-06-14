@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace EventHub.Models
+namespace EventHub.Models.DTOs
 {
-    public class Event
+    public class EventDto
     {
         public int Id { get; set; }
         public string Title { get; set; } = string.Empty;
@@ -13,11 +10,9 @@ namespace EventHub.Models
         public string Category { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public int MaxParticipants { get; set; }
-        public int CreatorId { get; set; }
-        public virtual User? Creator { get; set; }
-        public virtual ICollection<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
-        public virtual ICollection<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
         public bool IsFavorite { get; set; }
         public bool IsPlanned { get; set; }
+        public string? OrganizerEmail { get; set; }
+        public int CreatorId { get; set; }
     }
-}
+} 

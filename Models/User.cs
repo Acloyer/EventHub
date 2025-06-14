@@ -1,5 +1,6 @@
 ﻿using EventHub.Models;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace EventHub.Models
 {
@@ -7,12 +8,23 @@ namespace EventHub.Models
     {
         public int Id { get; set; }
         public string Email { get; set; } = string.Empty;
-        public string PasswordHash { get; set; } = string.Empty;
+        
+        [JsonIgnore]
+        public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
+        
+        [JsonIgnore]
+        public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
+
+        public bool IsBanned { get; set; } = false;
+
         public string? TelegramId { get; set; }
+        public string? TelegramCode { get; set; }
+
+        public bool IsTelegramVerified { get; set; }
         public bool NotifyBeforeEvent { get; set; } = true;
-        public List<UserRole> UserRoles { get; set; } = new List<UserRole>();
-        public List<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
-        public List<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
-        public List<Event> CreatedEvents { get; set; } = new List<Event>();
+        public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+        public virtual ICollection<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
+        public virtual ICollection<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
+        public virtual ICollection<Event> CreatedEvents { get; set; } = new List<Event>();
     }
 }

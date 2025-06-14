@@ -2,37 +2,27 @@
 
 #nullable disable
 
-namespace EventHub.Migrations
+namespace EventHub.Migrations.ApplicationDb
 {
     /// <inheritdoc />
-    public partial class InitUserTelegramNotify : Migration
+    public partial class AddIsBannedToUser : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<bool>(
-                name: "NotifyBeforeEvent",
+                name: "IsBanned",
                 table: "Users",
                 type: "boolean",
                 nullable: false,
                 defaultValue: false);
-
-            migrationBuilder.AddColumn<string>(
-                name: "TelegramId",
-                table: "Users",
-                type: "text",
-                nullable: true);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "NotifyBeforeEvent",
-                table: "Users");
-
-            migrationBuilder.DropColumn(
-                name: "TelegramId",
+                name: "IsBanned",
                 table: "Users");
         }
     }

@@ -3,6 +3,7 @@ using System;
 using EventHub.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EventHub.Migrations
 {
     [DbContext(typeof(EventHubDbContext))]
-    partial class EventHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250530172653_InitialCreate")]
+    partial class InitialCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -30,10 +33,6 @@ namespace EventHub.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<int>("CreatorId")
                         .HasColumnType("integer");
 
@@ -44,17 +43,10 @@ namespace EventHub.Migrations
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsFavorite")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPlanned")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Location")
-                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("MaxParticipants")
+                    b.Property<int?>("MaxParticipants")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("StartDate")
@@ -78,46 +70,46 @@ namespace EventHub.Migrations
 
             modelBuilder.Entity("EventHub.Models.FavoriteEvent", b =>
                 {
-                    b.Property<int>("UserId")
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int>("EventId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EventId1")
+                    b.Property<int>("UserId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
-                    b.HasKey("UserId", "EventId");
+                    b.HasKey("Id");
 
                     b.HasIndex("EventId");
 
-                    b.HasIndex("EventId1");
+                    b.HasIndex("UserId");
 
                     b.ToTable("FavoriteEvents");
                 });
 
             modelBuilder.Entity("EventHub.Models.PlannedEvent", b =>
                 {
-                    b.Property<int>("UserId")
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int>("EventId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EventId1")
+                    b.Property<int>("UserId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
-                    b.HasKey("UserId", "EventId");
+                    b.HasKey("Id");
 
                     b.HasIndex("EventId");
 
-                    b.HasIndex("EventId1");
+                    b.HasIndex("UserId");
 
                     b.ToTable("PlannedEvents");
                 });
@@ -236,9 +228,6 @@ namespace EventHub.Migrations
                     b.Property<int>("RoleId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
                     b.HasKey("UserId", "RoleId");
 
                     b.HasIndex("RoleId");
@@ -269,10 +258,6 @@ namespace EventHub.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("EventHub.Models.Event", null)
-                        .WithMany("FavoriteEvents")
-                        .HasForeignKey("EventId1");
-
                     b.HasOne("EventHub.Models.User", "User")
                         .WithMany("FavoriteEvents")
                         .HasForeignKey("UserId")
@@ -291,10 +276,6 @@ namespace EventHub.Migrations
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("EventHub.Models.Event", null)
-                        .WithMany("PlannedEvents")
-                        .HasForeignKey("EventId1");
 
                     b.HasOne("EventHub.Models.User", "User")
                         .WithMany("PlannedEvents")
@@ -324,13 +305,6 @@ namespace EventHub.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("EventHub.Models.Event", b =>
-                {
-                    b.Navigation("FavoriteEvents");
-
-                    b.Navigation("PlannedEvents");
                 });
 
             modelBuilder.Entity("EventHub.Models.Role", b =>

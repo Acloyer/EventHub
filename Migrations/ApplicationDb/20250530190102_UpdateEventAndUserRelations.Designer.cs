@@ -3,17 +3,20 @@ using System;
 using EventHub.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace EventHub.Migrations
+namespace EventHub.Migrations.ApplicationDb
 {
-    [DbContext(typeof(EventHubDbContext))]
-    partial class EventHubDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20250530190102_UpdateEventAndUserRelations")]
+    partial class UpdateEventAndUserRelations
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,17 +47,10 @@ namespace EventHub.Migrations
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsFavorite")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsPlanned")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Location")
-                        .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("MaxParticipants")
+                    b.Property<int?>("MaxParticipants")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("StartDate")
@@ -64,14 +60,9 @@ namespace EventHub.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatorId");
-
-                    b.HasIndex("UserId");
 
                     b.ToTable("Events");
                 });
@@ -84,17 +75,9 @@ namespace EventHub.Migrations
                     b.Property<int>("EventId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EventId1")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
                     b.HasKey("UserId", "EventId");
 
                     b.HasIndex("EventId");
-
-                    b.HasIndex("EventId1");
 
                     b.ToTable("FavoriteEvents");
                 });
@@ -107,17 +90,9 @@ namespace EventHub.Migrations
                     b.Property<int>("EventId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("EventId1")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
                     b.HasKey("UserId", "EventId");
 
                     b.HasIndex("EventId");
-
-                    b.HasIndex("EventId1");
 
                     b.ToTable("PlannedEvents");
                 });
@@ -162,6 +137,18 @@ namespace EventHub.Migrations
                         .IsUnique();
 
                     b.ToTable("Roles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Name = "Admin"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Name = "User"
+                        });
                 });
 
             modelBuilder.Entity("EventHub.Models.TelegramVerification", b =>
@@ -236,9 +223,6 @@ namespace EventHub.Migrations
                     b.Property<int>("RoleId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
                     b.HasKey("UserId", "RoleId");
 
                     b.HasIndex("RoleId");
@@ -249,14 +233,10 @@ namespace EventHub.Migrations
             modelBuilder.Entity("EventHub.Models.Event", b =>
                 {
                     b.HasOne("EventHub.Models.User", "Creator")
-                        .WithMany()
+                        .WithMany("CreatedEvents")
                         .HasForeignKey("CreatorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("EventHub.Models.User", null)
-                        .WithMany("CreatedEvents")
-                        .HasForeignKey("UserId");
 
                     b.Navigation("Creator");
                 });
@@ -268,10 +248,6 @@ namespace EventHub.Migrations
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("EventHub.Models.Event", null)
-                        .WithMany("FavoriteEvents")
-                        .HasForeignKey("EventId1");
 
                     b.HasOne("EventHub.Models.User", "User")
                         .WithMany("FavoriteEvents")
@@ -291,10 +267,6 @@ namespace EventHub.Migrations
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("EventHub.Models.Event", null)
-                        .WithMany("PlannedEvents")
-                        .HasForeignKey("EventId1");
 
                     b.HasOne("EventHub.Models.User", "User")
                         .WithMany("PlannedEvents")
@@ -324,13 +296,6 @@ namespace EventHub.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("EventHub.Models.Event", b =>
-                {
-                    b.Navigation("FavoriteEvents");
-
-                    b.Navigation("PlannedEvents");
                 });
 
             modelBuilder.Entity("EventHub.Models.Role", b =>

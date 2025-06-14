@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
-
 namespace EventHub.Controllers
 {
     [ApiController]
@@ -14,48 +13,67 @@ namespace EventHub.Controllers
     [Authorize]
     public class PlannedEventsController : ControllerBase
     {
-        private readonly EventHubDbContext _db;
-        public PlannedEventsController(EventHubDbContext db) => _db = db;
+        private readonly ApplicationDbContext _db;
+        public PlannedEventsController(ApplicationDbContext db) => _db = db;
 
+        // GET: api/PlannedEvents
         [HttpGet]
         public async Task<IActionResult> GetPlanned()
         {
-            int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            var events = await _db.PlannedEvents
+            var userId = int.Parse(
+                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+
+            var planned = await _db.PlannedEvents
                 .Where(p => p.UserId == userId)
                 .Include(p => p.Event)
                 .Select(p => p.Event)
                 .ToListAsync();
-            return Ok(events);
+
+            return Ok(planned);
         }
 
-        [HttpPost("{eventId}")]
+        // POST: api/PlannedEvents/5
+        [HttpPost("{eventId:int}")]
         public async Task<IActionResult> AddToPlanned(int eventId)
         {
-            int userId = int.Parse(
-                User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-                ?? throw new Exception("User ID not found in token")
-            );
+            var userId = int.Parse(
+                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
-            if (!await _db.Events.AnyAsync(e => e.Id == eventId))
-                return NotFound("Event does not exist.");
+            var @event = await _db.Events.FindAsync(eventId);
+            if (@event == null)
+                return NotFound("Event not found.");
 
-            if (await _db.PlannedEvents.AnyAsync(p => p.UserId == userId && p.EventId == eventId))
-                return BadRequest("Already planned");
+            var existingPlanned = await _db.PlannedEvents
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
 
-            _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId });
+            if (existingPlanned != null)
+            {
+                _db.PlannedEvents.Remove(existingPlanned);
+                await _db.SaveChangesAsync();
+                return Ok(new { isPlanned = false });
+            }
+
+            _db.PlannedEvents.Add(new PlannedEvent
+            {
+                UserId = userId,
+                EventId = eventId
+            });
             await _db.SaveChangesAsync();
-            return Ok("Added to planned");
+            return Ok(new { isPlanned = true });
         }
 
-        [HttpDelete("{eventId}")]
+        // DELETE: api/PlannedEvents/5
+        [HttpDelete("{eventId:int}")]
         public async Task<IActionResult> RemoveFromPlanned(int eventId)
         {
-            int userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var userId = int.Parse(
+                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
             var plan = await _db.PlannedEvents
-                .SingleOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
 
             if (plan == null) return NotFound();
             _db.PlannedEvents.Remove(plan);
@@ -64,4 +82,3 @@ namespace EventHub.Controllers
         }
     }
 }
-

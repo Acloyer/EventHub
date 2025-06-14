@@ -4,11 +4,14 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Security.Cryptography;
 
 using BCrypt.Net;
 using EventHub.Data;
 using EventHub.Models;
-using EventHub.Models.Dto;
+using EventHub.Models.DTOs;
+using EventHub.Services;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EventHub.Controllers
 {
@@ -16,84 +19,122 @@ namespace EventHub.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly EventHubDbContext _db;
+        private readonly ApplicationDbContext _db;
         private readonly IConfiguration _config;
+        private readonly IUserService _userService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(EventHubDbContext db, IConfiguration config)
+        public AuthController(ApplicationDbContext db, IConfiguration config, IUserService userService, ILogger<AuthController> logger)
         {
             _db = db;
             _config = config;
+            _userService = userService;
+            _logger = logger;
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        [AllowAnonymous]
+        public async Task<ActionResult<UserDto>> Register(UserRegisterDto registerDto)
         {
-            if (await _db.Users.AnyAsync(u => u.Email == dto.Email))
-                return BadRequest("User already exists.");
-
-            var user = new User
+            try
             {
-                Email = dto.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password)
-            };
+                var result = await _userService.Register(registerDto);
+                if (result == null)
+                {
+                    return BadRequest(new { message = "Email already exists" });
+                }
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
-
-            var token = GenerateJwt(user);
-            return Ok(new { Token = token });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during registration");
+                return StatusCode(500, new { message = "Error during registration" });
+            }
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDto dto)
+        [AllowAnonymous]
+        public async Task<ActionResult<UserDto>> Login(UserLoginDto loginDto)
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-                return Unauthorized("Invalid credentials.");
+            try
+            {
+                 // 1. Найди пользователя по email
+                var user = await _db.Users
+                    .Include(u => u.UserRoles)
+                    .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            var token = GenerateJwt(user);
-            return Ok(new { Token = token });
+                if (user == null)
+                    return Unauthorized(new { message = "Invalid email or password" });
+                // 2. Проверка на бан
+                if (user.IsBanned)
+                {
+                    return Unauthorized("К сожалению, пользователь забанен");
+                }
+                var result = await _userService.Login(loginDto);
+                if (result == null)
+                {
+                    return Unauthorized(new { message = "Invalid email or password" });
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during login");
+                return StatusCode(500, new { message = "Error during login" });
+            }
         }
 
         private string GenerateJwt(User user)
         {
-            // 1) Считаем у этого юзера роли из базы
             var roles = _db.UserRoles
-                           .Where(ur => ur.UserId == user.Id)
-                           .Include(ur => ur.Role)
-                           .Select(ur => ur.Role.Name)
-                           .ToList();
+                .Where(ur => ur.UserId == user.Id)
+                .Include(ur => ur.Role)
+                .Where(ur => ur.Role != null)
+                .Select(ur => ur.Role!.Name)
+                .ToList();
 
-            // 2) Собираем клаимы: sub, email и роли
             var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email)
-    };
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email)
+            };
+
             foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
-            // 3) Создаём токен
             var jwtSection = _config.GetSection("Jwt");
-            var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"]!);
+            var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"] ?? throw new InvalidOperationException("JWT Key not configured"));
             var creds = new SigningCredentials(
-                                new SymmetricSecurityKey(keyBytes),
-                                SecurityAlgorithms.HmacSha256
-                             );
+                new SymmetricSecurityKey(keyBytes),
+                SecurityAlgorithms.HmacSha256
+            );
 
             var token = new JwtSecurityToken(
                 issuer: jwtSection["Issuer"],
                 audience: jwtSection["Audience"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddMinutes(
-                                        double.Parse(jwtSection["ExpireMinutes"]!)),
+                    double.Parse(jwtSection["ExpireMinutes"] ?? "60")),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+    }
 
+    public class LoginRequest
+    {
+        public required string Email { get; set; }
+        public required string Password { get; set; }
+    }
+
+    public class RegisterRequest
+    {
+        public required string Email { get; set; }
+        public required string Password { get; set; }
     }
 }

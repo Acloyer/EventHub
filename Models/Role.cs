@@ -3,6 +3,7 @@
     public class Role
     {
         public int Id { get; set; }
-        public string Name { get; set; }  // "Admin", "Organizer" и т.д.
+        public required string Name { get; set; }  // "Admin", "Organizer" и т.д.
+        public required ICollection<UserRole> UserRoles { get; set; }
     }
 }
