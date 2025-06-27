@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace EventHub.Models
 {
@@ -17,7 +18,10 @@ namespace EventHub.Models
         public virtual User? Creator { get; set; }
         public virtual ICollection<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
         public virtual ICollection<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
+        [NotMapped]
         public bool IsFavorite { get; set; }
+
+        [NotMapped]
         public bool IsPlanned { get; set; }
     }
 }

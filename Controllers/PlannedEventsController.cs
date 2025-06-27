@@ -1,10 +1,12 @@
-﻿using EventHub.Data;
-using EventHub.Models;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
+using EventHub.Data;
+using EventHub.Models;
+using EventHub.Models.DTOs;
 
 namespace EventHub.Controllers
 {
@@ -13,16 +15,25 @@ namespace EventHub.Controllers
     [Authorize]
     public class PlannedEventsController : ControllerBase
     {
-        private readonly ApplicationDbContext _db;
-        public PlannedEventsController(ApplicationDbContext db) => _db = db;
+        private readonly EventHubDbContext _db;
+
+        public PlannedEventsController(EventHubDbContext db)
+        {
+            _db = db;
+        }
+
+        private bool TryGetUserId(out int userId)
+        {
+            var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(raw, out userId);
+        }
 
         // GET: api/PlannedEvents
         [HttpGet]
         public async Task<IActionResult> GetPlanned()
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
             var planned = await _db.PlannedEvents
                 .Where(p => p.UserId == userId)
@@ -33,52 +44,119 @@ namespace EventHub.Controllers
             return Ok(planned);
         }
 
-        // POST: api/PlannedEvents/5
+        // POST: api/PlannedEvents/{eventId}
         [HttpPost("{eventId:int}")]
         public async Task<IActionResult> AddToPlanned(int eventId)
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
-            var @event = await _db.Events.FindAsync(eventId);
-            if (@event == null)
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
                 return NotFound("Event not found.");
 
-            var existingPlanned = await _db.PlannedEvents
-                .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
+            var exists = await _db.PlannedEvents
+                .AnyAsync(p => p.UserId == userId && p.EventId == eventId);
 
-            if (existingPlanned != null)
+            if (!exists)
             {
-                _db.PlannedEvents.Remove(existingPlanned);
+                _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId });
                 await _db.SaveChangesAsync();
-                return Ok(new { isPlanned = false });
             }
 
-            _db.PlannedEvents.Add(new PlannedEvent
-            {
-                UserId = userId,
-                EventId = eventId
-            });
-            await _db.SaveChangesAsync();
             return Ok(new { isPlanned = true });
         }
 
-        // DELETE: api/PlannedEvents/5
+        // DELETE: api/PlannedEvents/{eventId}
         [HttpDelete("{eventId:int}")]
         public async Task<IActionResult> RemoveFromPlanned(int eventId)
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
             var plan = await _db.PlannedEvents
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
 
-            if (plan == null) return NotFound();
+            if (plan == null)
+                return NotFound("Planned entry not found.");
+
             _db.PlannedEvents.Remove(plan);
             await _db.SaveChangesAsync();
-            return Ok();
+
+            return Ok(new { isPlanned = false });
+        }
+
+        // ===== Admin endpoints =====
+
+        // GET: api/PlannedEvents/admin/all
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetAllPlannedEvents()
+        {
+            var all = await _db.PlannedEvents
+                .Include(p => p.Event)
+                    .ThenInclude(e => e.Creator)
+                .ToListAsync();
+
+            var result = all.Select(p => new
+            {
+                p.UserId,
+                p.EventId,
+                // Event = new EventDto(p.Event)
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        // GET: api/PlannedEvents/user/{userId}
+        [HttpGet("user/{userId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetPlannedForUser(int userId)
+        {
+            var list = await _db.PlannedEvents
+                .Where(p => p.UserId == userId)
+                .Include(p => p.Event)
+                    .ThenInclude(e => e.Creator)
+                .Select(p => new EventDto(p.Event))
+                .ToListAsync();
+
+            return Ok(list);
+        }
+
+        // POST: api/PlannedEvents/user/{userId}/{eventId}
+        [HttpPost("user/{userId:int}/{eventId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> AddPlannedForUser(int userId, int eventId)
+        {
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
+                return NotFound("Event not found.");
+
+            var exists = await _db.PlannedEvents
+                .AnyAsync(p => p.UserId == userId && p.EventId == eventId);
+            if (!exists)
+            {
+                _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId });
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(new { isPlanned = true });
+        }
+
+        // DELETE: api/PlannedEvents/user/{userId}/{eventId}
+        [HttpDelete("user/{userId:int}/{eventId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> RemovePlannedForUser(int userId, int eventId)
+        {
+            var plan = await _db.PlannedEvents
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
+            if (plan == null)
+                return NotFound("Planned entry not found.");
+
+            _db.PlannedEvents.Remove(plan);
+            await _db.SaveChangesAsync();
+
+            return Ok(new { isPlanned = false });
         }
     }
 }

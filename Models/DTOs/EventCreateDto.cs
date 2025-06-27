@@ -4,13 +4,12 @@ using EventHub.Models;
 
 namespace EventHub.Models.DTOs
 {
-    public class EventDto
+    public class EventCreateDto
     {
-        public EventDto() { }
+        public EventCreateDto() { }
 
-        public EventDto(Event e)
+        public EventCreateDto(Event e)
         {
-            Id              = e.Id;
             Title           = e.Title;
             Description     = e.Description;
             StartDate       = e.StartDate;
@@ -18,14 +17,8 @@ namespace EventHub.Models.DTOs
             Category        = e.Category;
             Location        = e.Location!;
             MaxParticipants = e.MaxParticipants;
-            CreatorId       = e.CreatorId;
-            OrganizerEmail  = e.Creator!.Email!;
-            OrganizerName   = e.Creator!.Name!;
-            IsFavorite      = false;
-            IsPlanned       = false;
         }
 
-        public int Id { get; set; }
         public string Title { get; set; } = null!;
         public string Description { get; set; } = null!;
         public DateTime StartDate { get; set; }
@@ -33,10 +26,5 @@ namespace EventHub.Models.DTOs
         public string Category { get; set; } = null!;
         public string Location { get; set; } = null!;
         public int MaxParticipants { get; set; }
-        public bool IsFavorite { get; set; }
-        public bool IsPlanned { get; set; }
-        public string OrganizerEmail { get; set; } = null!;
-        public string OrganizerName { get; set; } = null!;
-        public int CreatorId { get; set; }
     }
 }
