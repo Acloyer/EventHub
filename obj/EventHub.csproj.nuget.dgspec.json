@@ -1,32 +1,25 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Acloyer\\source\\repos\\EventHub\\EventHub\\EventHub.csproj": {}
+    "C:\\Users\\ASUS\\OneDrive\\Documents\\source\\repos\\EventHub\\EventHub\\EventHub.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Acloyer\\source\\repos\\EventHub\\EventHub\\EventHub.csproj": {
+    "C:\\Users\\ASUS\\OneDrive\\Documents\\source\\repos\\EventHub\\EventHub\\EventHub.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Acloyer\\source\\repos\\EventHub\\EventHub\\EventHub.csproj",
+        "projectUniqueName": "C:\\Users\\ASUS\\OneDrive\\Documents\\source\\repos\\EventHub\\EventHub\\EventHub.csproj",
         "projectName": "EventHub",
-        "projectPath": "C:\\Users\\Acloyer\\source\\repos\\EventHub\\EventHub\\EventHub.csproj",
-        "packagesPath": "C:\\Users\\Acloyer\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Acloyer\\source\\repos\\EventHub\\EventHub\\obj\\",
+        "projectPath": "C:\\Users\\ASUS\\OneDrive\\Documents\\source\\repos\\EventHub\\EventHub\\EventHub.csproj",
+        "packagesPath": "C:\\Users\\ASUS\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\ASUS\\OneDrive\\Documents\\source\\repos\\EventHub\\EventHub\\obj\\",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\Acloyer\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "C:\\Users\\ASUS\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -44,8 +37,7 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        },
-        "SdkAnalysisLevel": "9.0.300"
+        }
       },
       "frameworks": {
         "net8.0": {
@@ -57,7 +49,11 @@
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
-              "version": "[8.0.12, )"
+              "version": "[8.0.5, )"
+            },
+            "Microsoft.AspNetCore.Identity.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[8.0.0, )"
             },
             "Microsoft.AspNetCore.Mvc.NewtonsoftJson": {
               "target": "Package",
@@ -65,17 +61,21 @@
             },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[9.0.5, )"
+              "version": "[8.0.0, )"
             },
             "Microsoft.EntityFrameworkCore.Design": {
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
               "suppressParent": "All",
               "target": "Package",
-              "version": "[9.0.5, )"
+              "version": "[8.0.0, )"
+            },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
             },
             "Npgsql.EntityFrameworkCore.PostgreSQL": {
               "target": "Package",
-              "version": "[8.0.12, )"
+              "version": "[8.0.0, )"
             },
             "Swashbuckle.AspNetCore": {
               "target": "Package",
@@ -84,6 +84,10 @@
             "Telegram.Bot": {
               "target": "Package",
               "version": "[19.0.0, )"
+            },
+            "WTelegramClient": {
+              "target": "Package",
+              "version": "[4.3.5, )"
             }
           },
           "imports": [
@@ -105,7 +109,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.411/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

@@ -1,50 +1,47 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using System.Security.Cryptography;
-
-using BCrypt.Net;
-using EventHub.Data;
-using EventHub.Models;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using EventHub.Models.DTOs;
 using EventHub.Services;
-using Microsoft.AspNetCore.Authorization;
+using UserModel = EventHub.Models.User;
 
 namespace EventHub.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Consumes("application/json")]
+    [Produces("application/json")]
     public class AuthController : ControllerBase
     {
-        private readonly ApplicationDbContext _db;
-        private readonly IConfiguration _config;
+        private readonly UserManager<UserModel> _userManager;
+        private readonly JwtService _jwtService;
         private readonly IUserService _userService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(ApplicationDbContext db, IConfiguration config, IUserService userService, ILogger<AuthController> logger)
+        public AuthController(
+            UserManager<UserModel> userManager,
+            JwtService jwtService,
+            IUserService userService,
+            ILogger<AuthController> logger)
         {
-            _db = db;
-            _config = config;
+            _userManager = userManager;
+            _jwtService = jwtService;
             _userService = userService;
             _logger = logger;
         }
 
         [HttpPost("register")]
         [AllowAnonymous]
-        public async Task<ActionResult<UserDto>> Register(UserRegisterDto registerDto)
+        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterDto model)
         {
             try
             {
-                var result = await _userService.Register(registerDto);
-                if (result == null)
-                {
-                    return BadRequest(new { message = "Email already exists" });
-                }
-
+                var result = await _userService.Register(model);
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -55,29 +52,16 @@ namespace EventHub.Controllers
 
         [HttpPost("login")]
         [AllowAnonymous]
-        public async Task<ActionResult<UserDto>> Login(UserLoginDto loginDto)
+        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginDto model)
         {
             try
             {
-                 // 1. Найди пользователя по email
-                var user = await _db.Users
-                    .Include(u => u.UserRoles)
-                    .FirstOrDefaultAsync(u => u.Email == loginDto.Email);
-
-                if (user == null)
-                    return Unauthorized(new { message = "Invalid email or password" });
-                // 2. Проверка на бан
-                if (user.IsBanned)
-                {
-                    return Unauthorized("К сожалению, пользователь забанен");
-                }
-                var result = await _userService.Login(loginDto);
-                if (result == null)
-                {
-                    return Unauthorized(new { message = "Invalid email or password" });
-                }
-
+                var result = await _userService.Login(model);
                 return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -85,56 +69,5 @@ namespace EventHub.Controllers
                 return StatusCode(500, new { message = "Error during login" });
             }
         }
-
-        private string GenerateJwt(User user)
-        {
-            var roles = _db.UserRoles
-                .Where(ur => ur.UserId == user.Id)
-                .Include(ur => ur.Role)
-                .Where(ur => ur.Role != null)
-                .Select(ur => ur.Role!.Name)
-                .ToList();
-
-            var claims = new List<Claim>
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email)
-            };
-
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
-
-            var jwtSection = _config.GetSection("Jwt");
-            var keyBytes = Encoding.UTF8.GetBytes(jwtSection["Key"] ?? throw new InvalidOperationException("JWT Key not configured"));
-            var creds = new SigningCredentials(
-                new SymmetricSecurityKey(keyBytes),
-                SecurityAlgorithms.HmacSha256
-            );
-
-            var token = new JwtSecurityToken(
-                issuer: jwtSection["Issuer"],
-                audience: jwtSection["Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(
-                    double.Parse(jwtSection["ExpireMinutes"] ?? "60")),
-                signingCredentials: creds
-            );
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-    }
-
-    public class LoginRequest
-    {
-        public required string Email { get; set; }
-        public required string Password { get; set; }
-    }
-
-    public class RegisterRequest
-    {
-        public required string Email { get; set; }
-        public required string Password { get; set; }
     }
 }

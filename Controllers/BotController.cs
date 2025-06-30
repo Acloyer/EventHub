@@ -1,17 +1,17 @@
-﻿using EventHub.Data;
-using EventHub.Models;
+﻿// Controllers/BotController.cs
+using System;
+using System.Linq;
+using System.Text.Json;
+using System.Threading.Tasks;
+using EventHub.Data;
+using AppUser = EventHub.Models.User;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Security.Claims;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
 using Telegram.Bot;
-using Telegram.Bot.Types;
+using Microsoft.EntityFrameworkCore;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.ReplyMarkups;
-using Telegram.Bot.Exceptions;
-using Telegram.Bot.Polling;
-using Telegram.Bot.Args;
 
 namespace EventHub.Controllers
 {
@@ -19,155 +19,207 @@ namespace EventHub.Controllers
     [Route("api/[controller]")]
     public class BotController : ControllerBase
     {
-        private readonly EventHubDbContext _db;
-        private readonly ITelegramBotClient _bot;
-        private readonly IConfiguration _configuration;
+        readonly ITelegramBotClient    _bot;
+        readonly EventHubDbContext    _db;
+        readonly UserManager<AppUser> _users;
+        readonly string               _secret;
+        readonly string               _baseUrl;
+        readonly string               _token;
 
-        public BotController(EventHubDbContext db, ITelegramBotClient bot, IConfiguration configuration)
+        public BotController(
+            ITelegramBotClient bot,
+            EventHubDbContext db,
+            UserManager<AppUser> users,
+            IConfiguration     cfg)
         {
-            _db = db;
-            _bot = bot;
-            _configuration = configuration;
+            _bot    = bot;
+            _db     = db;
+            _users  = users;
+            _secret = cfg["Telegram:WebhookSecret"]!;
+            _baseUrl= cfg["Telegram:WebhookUrl"]!;
+            _token  = cfg["Telegram:BotToken"]!;
         }
 
-        // GET: api/bot/setup-webhook
-        [HttpGet("setup-webhook")]
-        public async Task<IActionResult> SetupWebhook()
+        // call once from your browser to register webhook
+        // [HttpGet("setup-webhook")]
+        // public async Task<IActionResult> SetupWebhook()
+        // {
+        //     var hook = $"{_baseUrl.TrimEnd('/')}/api/Bot/{_secret}/webhook";
+        //     await _bot.SetWebhookAsync(hook);
+        //     return Ok(new { webhook = hook });
+        // }
+        
+        // [HttpGet("setup-webhook"), ApiExplorerSettings(IgnoreApi = true)]
+        // public async Task<IActionResult> SetupWebhook()
+        // {
+        //     var hook = $"{_baseUrl.TrimEnd('/')}/api/Bot/{_secret}/webhook";
+        //     await _bot.SetWebhookAsync(hook);
+        //     return Ok(new { webhook = hook });
+        // }
+        
+        // Telegram’s CRC check
+        [HttpGet("{secret}/webhook"), AllowAnonymous]
+        public IActionResult GetWebhook(string secret, [FromQuery(Name="crc_token")] string crc)
         {
-            var webhookUrl = _configuration["TelegramBot:WebhookUrl"];
-            if (string.IsNullOrEmpty(webhookUrl))
-                return BadRequest("WebhookUrl not configured");
-
-            try
-            {
-                // Удаляем текущий webhook (если есть)
-                await _bot.DeleteWebhookAsync();
-
-                // Устанавливаем новый webhook
-                await _bot.SetWebhookAsync(webhookUrl);
-
-                // Получаем информацию о webhook для проверки
-                var webhookInfo = await _bot.GetWebhookInfoAsync();
-
-                return Ok(new
-                {
-                    WebhookUrl = webhookInfo.Url,
-                    LastErrorDate = webhookInfo.LastErrorDate,
-                    LastErrorMessage = webhookInfo.LastErrorMessage,
-                    PendingUpdateCount = webhookInfo.PendingUpdateCount
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { error = ex.Message });
-            }
+            if (secret != _secret) return Unauthorized();
+            using var h = new System.Security.Cryptography.HMACSHA256(
+                System.Text.Encoding.UTF8.GetBytes(_token));
+            var hash = h.ComputeHash(System.Text.Encoding.UTF8.GetBytes(crc));
+            return Ok(new { response_token = $"sha256={Convert.ToBase64String(hash)}" });
         }
 
-        // Webhook endpoint for Telegram updates
-        [HttpPost("webhook")]
-        public async Task<IActionResult> Post([FromBody] Update update)
+        // user clicks “Start verification” in your app
+        [Authorize, HttpPost("start-verification")]
+        public async Task<IActionResult> StartVerification()
         {
-            if (update?.Message?.Text == null && update?.CallbackQuery == null)
+            var user = await _users.GetUserAsync(User);
+            if (user == null) return Unauthorized();
+            if (user.IsTelegramVerified)
+                return BadRequest(new { message = "Вы уже верифицированы." });
+            if (user.TelegramId == null)
+                return BadRequest(new { message = "Сначала привяжите Telegram (GET /api/User/link-telegram)." });
+
+            var code = new Random().Next(100000, 999999);
+            user.TelegramCode = code;
+            await _users.UpdateAsync(user);
+
+            await _bot.SendTextMessageAsync(
+                chatId: user.TelegramId.Value,
+                text: $"Ваш проверочный код: {code}. Отправьте его сюда."
+            );
+            return Ok(new { message = "Код выслан в Telegram." });
+        }
+
+        
+        // [HttpPost("{secret}/webhook"), AllowAnonymous]
+        // public async Task<IActionResult> Webhook(string secret)
+        // {
+        //     if (secret != _secret)
+        //         return Unauthorized();
+
+        //     JsonDocument doc;
+        //     try
+        //     {
+        //         doc = await JsonDocument.ParseAsync(Request.Body);
+        //     }
+        //     catch
+        //     {
+        //         return BadRequest();
+        //     }
+
+        //     var root = doc.RootElement;
+        //     // если это не UpdateType.Message с текстом — ничего не делаем
+        //     if (!root.TryGetProperty("message", out var msg) ||
+        //         !msg.TryGetProperty("text", out var txt))
+        //         return Ok();
+
+        //     var text   = txt.GetString()!.Trim();
+        //     var chatId = msg.GetProperty("chat").GetProperty("id").GetInt64();
+
+        //     // 1) Обработка /start <userId>
+        //     if (text.StartsWith("/start"))
+        //     {
+        //         var parts = text.Split(' ', 2);
+        //         if (parts.Length == 2 && int.TryParse(parts[1], out var userId))
+        //         {
+        //             var user = await _db.Users.FindAsync(userId);
+        //             if (user != null)
+        //             {
+        //                 // Привязываем TelegramId
+        //                 user.TelegramId = chatId;
+
+        //                 // Генерируем и сохраняем новый код сразу же
+        //                 var code = new Random().Next(100000, 999999);
+        //                 user.TelegramCode = code;
+        //                 await _db.SaveChangesAsync();
+
+        //                 // Шлём пользователю инструкцию с кодом
+        //                 await _bot.SendTextMessageAsync(
+        //                     chatId: chatId,
+        //                     text: $"Привет! Чтобы завершить верификацию, введи на сайте этот код:\n\n<b>{code}</b>\n\n(введите его на странице Верификации)",
+        //                     parseMode: Telegram.Bot.Types.Enums.ParseMode.Html
+        //                 );
+        //             }
+        //         }
+        //         return Ok();
+        //     }
+
+        //     // 2) Обработка сообщения-кода из чата (не обязательно, можно удалить, если код вводится только на сайте)
+        //     if (int.TryParse(text, out var incomingCode))
+        //     {
+        //         var user = await _db.Users
+        //             .Where(u => u.TelegramId == chatId && u.TelegramCode == incomingCode)
+        //             .FirstOrDefaultAsync();
+
+        //         if (user == null)
+        //         {
+        //             await _bot.SendTextMessageAsync(
+        //                 chatId: chatId,
+        //                 text: "Неверный код. Попробуй ещё раз или введи код на сайте."
+        //             );
+        //             return Ok();
+        //         }
+
+        //         // Автоматически подтверждаем, если вы хотите сразу же
+        //         user.IsTelegramVerified = true;
+        //         user.TelegramCode       = null;
+        //         await _db.SaveChangesAsync();
+
+        //         await _bot.SendTextMessageAsync(
+        //             chatId: chatId,
+        //             text: "Спасибо! Твой аккаунт успешно верифицирован."
+        //         );
+        //     }
+
+        //     return Ok();
+        // }
+// BotController.cs
+
+        // 3) Все входящие update’ы от Telegram приходят сюда
+        [HttpPost("{secret}/webhook"), AllowAnonymous]
+        public async Task<IActionResult> Webhook(string secret)
+        {
+            if (secret != _secret)
+                return Unauthorized();
+
+            // Парсим JSON руками
+            JsonDocument doc;
+            try { doc = await JsonDocument.ParseAsync(Request.Body); }
+            catch { return BadRequest(); }
+
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("message", out var msg) ||
+                !msg.TryGetProperty("text", out var txt)   ||
+                !msg.TryGetProperty("chat", out var chat))
                 return Ok();
 
-            try
-            {
-                if (update.Type == UpdateType.Message && update.Message?.Text != null)
-                {
-                    var message = update.Message;
-                    if (message.Text.StartsWith("/start"))
-                    {
-                        var keyboard = new InlineKeyboardMarkup(new[]
-                        {
-                            new []
-                            {
-                                InlineKeyboardButton.WithCallbackData("Подтвердить аккаунт", "verify_account")
-                            }
-                        });
+            var text   = txt.GetString()!.Trim();
+            var chatId = chat.GetProperty("id").GetInt64();
 
-                        await _bot.SendTextMessageAsync(
-                            chatId: message.Chat.Id,
-                            text: "Добро пожаловать! Нажмите кнопку ниже, чтобы подтвердить ваш аккаунт.",
-                            replyMarkup: keyboard
-                        );
-                    }
-                }
-                else if (update.Type == UpdateType.CallbackQuery && update.CallbackQuery != null)
+            // 1) пользователь написал "/start {userId}" — привязка + генерация кода
+            if (text.StartsWith("/start"))
+            {
+                var parts = text.Split(' ', 2);
+                if (parts.Length == 2 && int.TryParse(parts[1], out var uid))
                 {
-                    var callback = update.CallbackQuery;
-                    if (callback.Data == "verify_account" && callback.Message != null)
+                    var user = await _db.Users.FindAsync(uid);
+                    if (user != null)
                     {
-                        var chatId = callback.Message.Chat.Id.ToString();
-                        
-                        // Генерируем код подтверждения
-                        var code = new Random().Next(100000, 999999).ToString();
-                        
-                        // Сохраняем временный код в базе
-                        var pendingVerification = new TelegramVerification
-                        {
-                            ChatId = chatId,
-                            VerificationCode = code,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        
-                        _db.TelegramVerifications.Add(pendingVerification);
+                        user.TelegramId   = chatId;
+                        user.TelegramCode = new Random().Next(100000, 999999);
                         await _db.SaveChangesAsync();
 
                         await _bot.SendTextMessageAsync(
-                            chatId: callback.Message.Chat.Id,
-                            text: $"Ваш код подтверждения: *{code}*\n\nВведите этот код на сайте для завершения привязки аккаунта.",
-                            parseMode: ParseMode.Markdown
+                            chatId: chatId,
+                            text: $"Привет! Чтобы завершить верификацию, введи этот код на сайте:\n\n<b>{user.TelegramCode}</b>",
+                            parseMode: ParseMode.Html
                         );
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                // Log the error but return OK to Telegram
-                Console.WriteLine($"Error processing update: {ex}");
-            }
 
+            // 2) игнорируем всё остальное — проверка кода будет через API
             return Ok();
-        }
-
-        [Authorize]
-        [HttpPost("verify/{code}")]
-        public async Task<IActionResult> VerifyTelegramCode(string code)
-        {
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userId))
-                return Unauthorized();
-
-            var verification = await _db.TelegramVerifications
-                .FirstOrDefaultAsync(v => v.VerificationCode == code);
-
-            if (verification == null)
-                return BadRequest("Неверный код подтверждения");
-
-            if ((DateTime.UtcNow - verification.CreatedAt).TotalMinutes > 15)
-            {
-                _db.TelegramVerifications.Remove(verification);
-                await _db.SaveChangesAsync();
-                return BadRequest("Код подтверждения истек");
-            }
-
-            var user = await _db.Users.FindAsync(int.Parse(userId));
-            if (user == null)
-                return NotFound();
-
-            user.TelegramId = verification.ChatId;
-            user.IsTelegramVerified = true;
-
-            _db.TelegramVerifications.Remove(verification);
-            await _db.SaveChangesAsync();
-
-            await _bot.SendTextMessageAsync(
-                chatId: verification.ChatId,
-                text: "✅ Ваш аккаунт успешно привязан к Telegram!",
-                parseMode: ParseMode.Markdown
-            );
-
-            return Ok(new { message = "Telegram успешно привязан" });
         }
     }
 }

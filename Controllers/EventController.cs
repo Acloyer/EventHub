@@ -1,65 +1,88 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Identity;
 
 namespace EventHub.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Produces("application/json")]
     public class EventController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly EventHubDbContext _db;
         private readonly ILogger<EventController> _logger;
-
-        public EventController(ApplicationDbContext context, ILogger<EventController> logger)
+        private readonly UserManager<User> _userManager;
+        
+        public EventController(EventHubDbContext db, ILogger<EventController> logger, UserManager<User> userManager)
         {
-            _context = context;
+            _db = db;
+            _userManager = userManager;
             _logger = logger;
         }
 
         private int? GetCurrentUserId()
         {
-            try
-            {
-                if (User.Identity?.IsAuthenticated != true)
-                    return null;
-
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                return userIdClaim != null ? int.Parse(userIdClaim.Value) : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting current user ID");
-                return null;
-            }
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(claim, out var id) ? id : null;
         }
 
         private async Task<bool> IsUserOrganizer(int userId)
         {
-            var user = await _context.Users
-                .Include(u => u.UserRoles)
-                .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
-            return user?.UserRoles.Any(ur => ur.Role?.Name == "Organizer" 
-                                          || ur.Role?.Name == "Admin" 
-                                          || ur.Role?.Name == "SeniorAdmin" 
-                                          || ur.Role?.Name == "Owner") ?? false;
+            // через Identity
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+            var roles = await _userManager.GetRolesAsync(user);
+            return roles.Any(r =>
+                r == "Organizer" ||
+                r == "Admin" ||
+                r == "SeniorAdmin" ||
+                r == "Owner");
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<EventDto>>> GetEvents()
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetEvents(
+            [FromQuery] string sortBy = "StartDate",
+            [FromQuery] string order = "asc")
         {
             var userId = GetCurrentUserId();
+            IQueryable<Event> query = _db.Events.Include(e => e.Creator);
 
-            var events = await _context.Events
-                .Include(e => e.Creator)
-                    .ThenInclude(u => u!.UserRoles)
-                        .ThenInclude(ur => ur.Role)
+            // Сортировка
+            switch (sortBy)
+            {
+                case "Title":
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.Title)
+                        : query.OrderBy(e => e.Title);
+                    break;
+                case "EndDate":
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.EndDate)
+                        : query.OrderBy(e => e.EndDate);
+                    break;
+                case "Category":
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.Category)
+                        : query.OrderBy(e => e.Category);
+                    break;
+                default: // StartDate
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.StartDate)
+                        : query.OrderBy(e => e.StartDate);
+                    break;
+            }
+
+            var events = await query
                 .Select(e => new EventDto
                 {
                     Id = e.Id,
@@ -71,24 +94,23 @@ namespace EventHub.Controllers
                     Location = e.Location,
                     MaxParticipants = e.MaxParticipants,
                     OrganizerEmail = e.Creator!.Email,
+                    OrganizerName = e.Creator!.Name,
                     CreatorId = e.CreatorId,
-                    IsFavorite = userId.HasValue && _context.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
-                    IsPlanned = userId.HasValue && _context.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
                 })
                 .ToListAsync();
 
-            return events;
+            return Ok(events);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<EventDto>> GetEvent(int id)
         {
             var userId = GetCurrentUserId();
 
-            var @event = await _context.Events
+            var evt = await _db.Events
                 .Include(e => e.Creator)
-                    .ThenInclude(u => u!.UserRoles)
-                        .ThenInclude(ur => ur.Role)
                 .Where(e => e.Id == id)
                 .Select(e => new EventDto
                 {
@@ -101,38 +123,85 @@ namespace EventHub.Controllers
                     Location = e.Location,
                     MaxParticipants = e.MaxParticipants,
                     OrganizerEmail = e.Creator!.Email,
+                    OrganizerName = e.Creator!.Name,
                     CreatorId = e.CreatorId,
-                    IsFavorite = userId.HasValue && _context.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
-                    IsPlanned = userId.HasValue && _context.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
                 })
                 .FirstOrDefaultAsync();
 
-            if (@event == null)
+            if (evt == null)
             {
                 return NotFound(new { message = "Event not found" });
             }
 
-            return @event;
+            return Ok(evt);
         }
+
+
+        /// <summary>
+        /// GET: api/Event/category/{category}
+        /// Поиск событий по категории
+        /// </summary>
+        [HttpGet("category/{category}")]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetByCategory(
+            string category,
+            [FromQuery] string sortBy = "StartDate",
+            [FromQuery] string order = "asc")
+        {
+            var userId = GetCurrentUserId();
+            IQueryable<Event> query = _db.Events
+                .Include(e => e.Creator)
+                .Where(e => e.Category == category);
+
+            // Сортировка аналогично
+            switch (sortBy)
+            {
+                case "Title":
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.Title)
+                        : query.OrderBy(e => e.Title);
+                    break;
+                case "EndDate":
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.EndDate)
+                        : query.OrderBy(e => e.EndDate);
+                    break;
+                default: // StartDate и другие поля
+                    query = order == "desc"
+                        ? query.OrderByDescending(e => e.StartDate)
+                        : query.OrderBy(e => e.StartDate);
+                    break;
+            }
+
+            var events = await query
+                .Select(e => new EventDto(e)
+                {
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                })
+                .ToListAsync();
+
+            return Ok(events);
+        }
+
+        // ADMIN COMMANDS: 
 
         [Authorize]
         [HttpPost]
-        public async Task<ActionResult<EventDto>> CreateEvent(EventDto eventDto)
+        public async Task<ActionResult<EventDto>> CreateEvent(EventCreateDto eventDto)
         {
             var userId = GetCurrentUserId();
             if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to create event without authentication");
                 return Unauthorized(new { message = "Authentication required" });
-            }
 
             if (!await IsUserOrganizer(userId.Value))
             {
-                _logger.LogWarning($"User {userId} attempted to create event without proper role");
-                return StatusCode(403, new { message = "Only organizers and administrators can create events" });
+                _logger.LogWarning($"User {userId} unauthorized to create event");
+                return Forbid();
             }
 
-            var @event = new Event
+            var evt = new Event
             {
                 Title = eventDto.Title,
                 Description = eventDto.Description,
@@ -144,52 +213,43 @@ namespace EventHub.Controllers
                 CreatorId = userId.Value
             };
 
-            _context.Events.Add(@event);
-            await _context.SaveChangesAsync();
+            _db.Events.Add(evt);
+            await _db.SaveChangesAsync();
 
-            var createdEvent = await GetEvent(@event.Id);
-            return CreatedAtAction(nameof(GetEvent), new { id = @event.Id }, createdEvent.Value);
+            var created = await _db.Events.FindAsync(evt.Id);
+            return CreatedAtAction(nameof(GetEvent), new { id = evt.Id }, new EventDto(created!));
         }
 
         [Authorize]
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateEvent(int id, EventDto eventDto)
         {
             var userId = GetCurrentUserId();
             if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to update event without authentication");
                 return Unauthorized(new { message = "Authentication required" });
-            }
 
-            var @event = await _context.Events.FindAsync(id);
-            if (@event == null)
-            {
+            var evt = await _db.Events.FindAsync(id);
+            if (evt == null)
                 return NotFound(new { message = "Event not found" });
-            }
 
-            if (@event.CreatorId != userId && !User.IsInRole("Admin"))
-            {
-                _logger.LogWarning($"User {userId} attempted to update event {id} without proper permissions");
-                return StatusCode(403, new { message = "Only the event creator or administrators can update this event" });
-            }
+            if (evt.CreatorId != userId.Value && !User.IsInRole("Admin"))
+                return Forbid();
 
-            @event.Title = eventDto.Title;
-            @event.Description = eventDto.Description;
-            @event.StartDate = eventDto.StartDate;
-            @event.EndDate = eventDto.EndDate;
-            @event.Category = eventDto.Category;
-            @event.Location = eventDto.Location;
-            @event.MaxParticipants = eventDto.MaxParticipants;
+            evt.Title = eventDto.Title;
+            evt.Description = eventDto.Description;
+            evt.StartDate = eventDto.StartDate;
+            evt.EndDate = eventDto.EndDate;
+            evt.Category = eventDto.Category;
+            evt.Location = eventDto.Location;
+            evt.MaxParticipants = eventDto.MaxParticipants;
 
             try
             {
-                await _context.SaveChangesAsync();
+                await _db.SaveChangesAsync();
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (DbUpdateConcurrencyException)
             {
-                _logger.LogError(ex, $"Concurrency error updating event {id}");
-                if (!EventExists(id))
+                if (!_db.Events.Any(e => e.Id == id))
                     return NotFound(new { message = "Event not found" });
                 throw;
             }
@@ -198,37 +258,37 @@ namespace EventHub.Controllers
         }
 
         [Authorize]
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteEvent(int id)
         {
             var userId = GetCurrentUserId();
             if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to delete event without authentication");
                 return Unauthorized(new { message = "Authentication required" });
-            }
 
-            var @event = await _context.Events.FindAsync(id);
-            if (@event == null)
-            {
+            var evt = await _db.Events.FindAsync(id);
+            if (evt == null)
                 return NotFound(new { message = "Event not found" });
-            }
 
-            if (@event.CreatorId != userId && !User.IsInRole("Admin"))
-            {
-                _logger.LogWarning($"User {userId} attempted to delete event {id} without proper permissions");
-                return StatusCode(403, new { message = "Only the event creator or administrators can delete this event" });
-            }
+            if (evt.CreatorId != userId.Value && !User.IsInRole("Admin"))
+                return Forbid();
 
-            _context.Events.Remove(@event);
-            await _context.SaveChangesAsync();
+            _db.Events.Remove(evt);
+            await _db.SaveChangesAsync();
 
             return NoContent();
         }
 
-        private bool EventExists(int id)
+        [HttpGet("user/{userId:int}")]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetEventsByUser(int userId)
         {
-            return _context.Events.Any(e => e.Id == id);
+            var events = await _db.Events
+                .Where(e => e.CreatorId == userId)
+                .Select(e => new EventDto(e))
+                .ToListAsync();
+
+            return Ok(events);
         }
+
+        private bool EventExists(int id) => _db.Events.Any(e => e.Id == id);
     }
 }
