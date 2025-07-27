@@ -223,6 +223,7 @@ namespace EventHub.Controllers
             if (!res.Succeeded) return BadRequest(res.Errors);
 
             return Ok(new UserDto(user));
+<<<<<<< HEAD
         }
 
         [Authorize]
@@ -267,6 +268,67 @@ namespace EventHub.Controllers
             }
 
             return Ok(new { message = "Телеграм подтверждён." });
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
         }
+
+        [Authorize]
+        [HttpGet("link-telegram")]
+        public IActionResult GetTelegramLink()
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized();
+
+            var botUsername = "eventthub_bot"; 
+            var link = $"https://t.me/{botUsername}?start={userId.Value}";
+            return Ok(new { link });
+        }
+
+        [Authorize]
+        [HttpPost("start-telegram-verification")]
+        public async Task<IActionResult> StartTelegramVerification()
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) 
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) 
+                return NotFound();
+
+            if (user.TelegramId == null)
+                return BadRequest(new { message = "Сначала привяжите Telegram (link-telegram)." });
+
+            if (user.IsTelegramVerified)
+                return BadRequest(new { message = "Вы уже верифицированы." });
+
+            // Генерируем шестизначный код
+            var code    = new Random().Next(100000, 999999);
+            var expires = DateTime.UtcNow.AddMinutes(10);
+
+            // Сохраняем в базу
+            var tv = new TelegramVerification 
+            {
+                UserId    = user.Id,
+                ChatId    = user.TelegramId.Value,
+                Code      = code,
+                ExpiresAt = expires
+            };
+            _db.TelegramVerifications.Add(tv);
+            await _db.SaveChangesAsync();
+
+            // Отправляем код в Telegram
+            await _bot.SendTextMessageAsync(
+                chatId: user.TelegramId.Value,
+                text: $"Ваш код для верификации: {code} (действует до {expires:u})"
+            );
+
+            return Ok(new 
+            {
+                message   = "Код отправлен в Telegram. Введите его в чате с ботом."
+            });
+        }
+
     }
 }

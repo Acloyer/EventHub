@@ -27,6 +27,7 @@ namespace EventHub.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+<<<<<<< HEAD
                     
             // ==== TelegramVerification ====
             modelBuilder.Entity<TelegramVerification>(entity =>
@@ -109,12 +110,35 @@ namespace EventHub.Data
 
             // ==== Существующие сущности ====
 
+=======
+
+            modelBuilder.Entity<TelegramVerification>()
+                .HasOne(tv => tv.User)
+                .WithMany()
+                .HasForeignKey(tv => tv.UserId);
+
+            // Вызов базового
+            base.OnModelCreating(modelBuilder);
+
+            // Переименование таблицы пользователя на AspNetUsers
+            modelBuilder.Entity<User>()
+                .ToTable("AspNetUsers");
+
+            // Конфигурация Role (IdentityRole настроен в IdentityDbContext)
+            modelBuilder.Entity<Role>(entity =>
+            {
+                entity.ToTable("AspNetRoles");
+            });
+
+            // Конфигурация Event
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
             modelBuilder.Entity<Event>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Title).IsRequired();
                 entity.Property(e => e.Description).IsRequired();
                 entity.HasOne(e => e.Creator)
+<<<<<<< HEAD
                     .WithMany(u => u.CreatedEvents)
                     .HasForeignKey(e => e.CreatorId)
                     .OnDelete(DeleteBehavior.Cascade);
@@ -146,6 +170,57 @@ namespace EventHub.Data
                         .ToTable("AspNetUsers");
             modelBuilder.Entity<Role>()
                         .ToTable("AspNetRoles");
+=======
+                      .WithMany(u => u.CreatedEvents)
+                      .HasForeignKey(e => e.CreatorId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Конфигурация PostReaction
+            modelBuilder.Entity<PostReaction>()
+                .HasKey(pr => pr.Id);
+
+            // Конфигурация FavoriteEvent
+            modelBuilder.Entity<FavoriteEvent>(entity =>
+            {
+                entity.HasKey(e => new { e.UserId, e.EventId });
+                entity.HasOne(f => f.User)
+                      .WithMany(u => u.FavoriteEvents)
+                      .HasForeignKey(f => f.UserId);
+                entity.HasOne(f => f.Event)
+                      .WithMany(e => e.FavoriteEvents)
+                      .HasForeignKey(f => f.EventId);
+            });
+
+            // Конфигурация PlannedEvent
+            modelBuilder.Entity<PlannedEvent>(entity =>
+            {
+                entity.HasKey(e => new { e.UserId, e.EventId });
+                entity.HasOne(p => p.User)
+                      .WithMany(u => u.PlannedEvents)
+                      .HasForeignKey(p => p.UserId);
+                entity.HasOne(p => p.Event)
+                      .WithMany(e => e.PlannedEvents)
+                      .HasForeignKey(p => p.EventId);
+            });
+
+            // Конфигурация TelegramVerification
+            modelBuilder.Entity<TelegramVerification>()
+                .HasKey(tv => tv.Id);
+
+            modelBuilder.Entity<TelegramVerification>(entity =>
+            {
+                entity.ToTable("TelegramVerifications");
+                entity.HasKey(tv => tv.Id);
+
+                entity
+                .HasOne(tv => tv.User)
+                .WithMany(u => u.TelegramVerifications)
+                .HasForeignKey(tv => tv.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            });
+
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
         }
     }
 }

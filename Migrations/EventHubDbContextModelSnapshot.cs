@@ -63,6 +63,7 @@ namespace EventHub.Migrations
                     b.HasIndex("CreatorId");
 
                     b.ToTable("Events");
+<<<<<<< HEAD
                 });
 
             modelBuilder.Entity("EventHub.Models.EventComment", b =>
@@ -106,6 +107,8 @@ namespace EventHub.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("EventComments");
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
                 });
 
             modelBuilder.Entity("EventHub.Models.FavoriteEvent", b =>
@@ -316,8 +319,13 @@ namespace EventHub.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
+<<<<<<< HEAD
                     b.Property<int?>("TelegramCode")
                         .HasColumnType("integer");
+=======
+                    b.Property<long?>("TelegramCode")
+                        .HasColumnType("bigint");
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
 
                     b.Property<long?>("TelegramId")
                         .HasColumnType("bigint");
@@ -341,6 +349,7 @@ namespace EventHub.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+<<<<<<< HEAD
             modelBuilder.Entity("EventHub.Models.UserMuteEntry", b =>
                 {
                     b.Property<int>("UserId")
@@ -357,6 +366,8 @@ namespace EventHub.Migrations
                     b.ToTable("UserMuteEntries");
                 });
 
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.Property<int>("Id")
@@ -539,6 +550,7 @@ namespace EventHub.Migrations
                     b.Navigation("User");
                 });
 
+<<<<<<< HEAD
             modelBuilder.Entity("EventHub.Models.PostReaction", b =>
                 {
                     b.HasOne("EventHub.Models.Event", "Event")
@@ -549,10 +561,17 @@ namespace EventHub.Migrations
 
                     b.HasOne("EventHub.Models.User", "User")
                         .WithMany("PostReactions")
+=======
+            modelBuilder.Entity("EventHub.Models.TelegramVerification", b =>
+                {
+                    b.HasOne("EventHub.Models.User", "User")
+                        .WithMany("TelegramVerifications")
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+<<<<<<< HEAD
                     b.Navigation("Event");
 
                     b.Navigation("User");
@@ -580,6 +599,11 @@ namespace EventHub.Migrations
                     b.Navigation("User");
                 });
 
+=======
+                    b.Navigation("User");
+                });
+
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.HasOne("EventHub.Models.Role", null)
@@ -639,9 +663,12 @@ namespace EventHub.Migrations
 
                     b.Navigation("PlannedEvents");
 
+<<<<<<< HEAD
                     b.Navigation("PostReactions");
                 });
 
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
             modelBuilder.Entity("EventHub.Models.User", b =>
                 {
                     b.Navigation("CreatedEvents");
@@ -652,8 +679,11 @@ namespace EventHub.Migrations
 
                     b.Navigation("PlannedEvents");
 
+<<<<<<< HEAD
                     b.Navigation("PostReactions");
 
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
                     b.Navigation("TelegramVerifications");
                 });
 #pragma warning restore 612, 618
