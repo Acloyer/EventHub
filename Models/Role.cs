@@ -1,9 +1,9 @@
-﻿namespace EventHub.Models
+﻿using Microsoft.AspNetCore.Identity;
+
+namespace EventHub.Models
 {
-    public class Role
+    public class Role : IdentityRole<int>
     {
-        public int Id { get; set; }
-        public required string Name { get; set; }  // "Admin", "Organizer" и т.д.
-        public required ICollection<UserRole> UserRoles { get; set; }
+        
     }
 }
