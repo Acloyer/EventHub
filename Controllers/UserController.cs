@@ -29,19 +29,27 @@ namespace EventHub.Controllers
         private readonly UserManager<User> _userManager;
         private readonly ITelegramBotClient _bot;
         private readonly ILogger<UserController> _logger;
+<<<<<<< HEAD
         private readonly IConfiguration _config;
         private readonly IActivityLogService _activityLogService;
         private readonly JwtService _jwtService;
         
+=======
+        private readonly IConfiguration       _config;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         public UserController(
             EventHubDbContext db,
             IUserService userService,
             UserManager<User> userManager,
             ITelegramBotClient bot,
             ILogger<UserController> logger,
+<<<<<<< HEAD
             IConfiguration config,
             IActivityLogService activityLogService,
             JwtService jwtService)
+=======
+            IConfiguration config)
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         {
             _db = db;
             _userService = userService;
@@ -49,8 +57,11 @@ namespace EventHub.Controllers
             _bot = bot;
             _logger = logger;
             _config = config;
+<<<<<<< HEAD
             _activityLogService = activityLogService;
             _jwtService = jwtService;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         }
 
         private int? GetCurrentUserId()
@@ -60,7 +71,11 @@ namespace EventHub.Controllers
         }
 
         /// <summary>
+<<<<<<< HEAD
         /// Extracts userId from JWT claim NameIdentifier
+=======
+        /// Вытаскивает userId из JWT-клейма NameIdentifier
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         /// </summary>
         private bool TryGetUserId(out int userId)
         {
@@ -68,6 +83,7 @@ namespace EventHub.Controllers
             return int.TryParse(raw, out userId);
         }
 
+<<<<<<< HEAD
         private static readonly Dictionary<string, int> RolePriority = new()
         {
             ["Owner"] = 4,
@@ -80,12 +96,18 @@ namespace EventHub.Controllers
         /// <summary>
         /// GET: api/User/profile
         /// Returns profile by userId from token
+=======
+        /// <summary>
+        /// GET: api/User/profile
+        /// Возвращает профиль по userId из токена
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         /// </summary>
         [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
             if (!TryGetUserId(out var userId))
                 return Unauthorized();
+<<<<<<< HEAD
 
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
@@ -249,9 +271,17 @@ namespace EventHub.Controllers
                 dto.Roles = (await _userManager.GetRolesAsync(user)).ToList();
                 userDtos.Add(dto);
             }
+=======
 
-            return Ok(new
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+                return NotFound();
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+
+            var roles = await _userManager.GetRolesAsync(user);
+            return Ok(new UserProfileDto
             {
+<<<<<<< HEAD
                 Items = userDtos,
                 TotalCount = totalCount,
                 TotalPages = totalPages,
@@ -286,11 +316,87 @@ namespace EventHub.Controllers
             return Ok(userDto);
         }
         
+=======
+                Id = user.Id,
+                Email = user.Email,
+                Name = user.Name,
+                IsBanned = user.IsBanned,
+                Roles = roles.ToArray(),
+                TelegramId = user.TelegramId,
+                IsTelegramVerified = user.IsTelegramVerified,
+                NotifyBeforeEvent = user.NotifyBeforeEvent
+            });
+        }
+
+        /// <summary>
+        /// GET: api/User/created-events
+        /// Возвращает события, созданные текущим пользователем
+        /// </summary>
+        [HttpGet("created-events")]
+        public async Task<IActionResult> GetCreatedEvents()
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var events = await _db.Events
+                .Include(e => e.Creator)
+                .Where(e => e.CreatorId == userId)
+                .ToListAsync();
+
+            return Ok(events.Select(e => new EventDto(e)));
+        }
+
+        [Authorize]
+        [HttpPost("set-notify")]
+        public async Task<IActionResult> SetNotify([FromBody] bool notify)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound();
+
+            user.NotifyBeforeEvent = notify;
+            await _userManager.UpdateAsync(user);
+            return Ok(new { notify });
+        }
+
+        // [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        [HttpGet("all")]
+        [Authorize]
+        public async Task<IActionResult> GetAllUsers()
+        {
+            var users = await _db.Users.ToListAsync();
+
+            var result = new List<UserDto>();
+            foreach (var user in users)
+            {
+                var dto = new UserDto(user){
+                    IsBanned = user.IsBanned
+                };
+                dto.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                result.Add(dto);
+            }
+
+            return Ok(result);
+        }
+
+        [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetUser(int id)
+        {
+            var user = await _db.Users.SingleOrDefaultAsync(u => u.Id == id);
+            if (user == null) return NotFound();
+            return Ok(new UserDto(user));
+        }
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var currentUser = GetCurrentUserId();
+<<<<<<< HEAD
             if (!currentUser.HasValue) return Unauthorized();
             
             // Check if user is trying to delete themselves
@@ -330,6 +436,14 @@ namespace EventHub.Controllers
             );
 
             await _userManager.DeleteAsync(targetUser);
+=======
+            if (currentUser == id) return BadRequest("Cannot delete self");
+
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound();
+
+            await _userManager.DeleteAsync(user);
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             return NoContent();
         }
 
@@ -337,6 +451,7 @@ namespace EventHub.Controllers
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> ToggleBan(int id)
         {
+<<<<<<< HEAD
             var currentUser = GetCurrentUserId();
             if (!currentUser.HasValue) return Unauthorized();
             
@@ -380,12 +495,20 @@ namespace EventHub.Controllers
             );
             
             return Ok(new { targetUser.IsBanned });
+=======
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound();
+            user.IsBanned = !user.IsBanned;
+            await _userManager.UpdateAsync(user);
+            return Ok(new { user.IsBanned });
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         }
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UserUpdateDto dto)
         {
+<<<<<<< HEAD
             var currentUser = GetCurrentUserId();
             if (!currentUser.HasValue) return Unauthorized();
             
@@ -432,6 +555,18 @@ namespace EventHub.Controllers
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
             
+=======
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound();
+
+            user.Name = dto.Name;
+            user.IsBanned = dto.IsBanned;
+            user.TelegramId = dto.TelegramId;
+            user.IsTelegramVerified = dto.IsTelegramVerified;
+            user.NotifyBeforeEvent = dto.NotifyBeforeEvent;
+
+            await _userManager.UpdateAsync(user);
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             return NoContent();
         }
 
@@ -445,26 +580,39 @@ namespace EventHub.Controllers
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null) return NotFound();
 
+<<<<<<< HEAD
             // Apply only safe fields for yourself:
+=======
+            // Применяем только безопасные для себя поля:
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             if (!string.IsNullOrWhiteSpace(dto.Name))
                 user.Name = dto.Name;
 
             if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email != user.Email)
             {
                 if (await _userManager.FindByEmailAsync(dto.Email) != null)
+<<<<<<< HEAD
                     return BadRequest("Email is already taken");
+=======
+                    return BadRequest("Email уже занят");
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
                 user.Email    = dto.Email;
                 user.UserName = dto.Email;
             }
 
             user.TelegramId        = dto.TelegramId;
             user.NotifyBeforeEvent = dto.NotifyBeforeEvent;
+<<<<<<< HEAD
             // user.IsBanned - don't touch!
+=======
+            // user.IsBanned не трогаем!
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             var res = await _userManager.UpdateAsync(user);
             if (!res.Succeeded) return BadRequest(res.Errors);
 
             return Ok(new UserDto(user));
+<<<<<<< HEAD
         }
 
         [Authorize]
@@ -725,6 +873,114 @@ namespace EventHub.Controllers
             );
 
             return Ok(new { message = "Roles updated successfully" });
+=======
+<<<<<<< HEAD
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         }
+
+        [Authorize]
+        [HttpGet("link-telegram")]
+        public IActionResult GetTelegramLink()
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized();
+
+            var botUsername = "eventthub_bot"; 
+            var link = $"https://t.me/{botUsername}?start={userId.Value}";
+            return Ok(new { link });
+        }
+
+                
+        [Authorize]
+        [HttpPost("confirm-telegram")]
+        public async Task<IActionResult> ConfirmTelegramCode([FromBody] ConfirmTelegramCodeDto dto)
+        {
+            // 1) Получаем пользователя из токена
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) 
+                return Unauthorized();
+
+            // 2) Проверяем, что код совпадает
+            if (user.TelegramCode != dto.Code)
+                return BadRequest(new { message = "Неверный код." });
+
+            // 3) Завершаем верификацию
+            user.IsTelegramVerified = true;
+            user.TelegramCode       = null;
+            await _userManager.UpdateAsync(user);
+
+            // 4) Отправляем поздравление в Telegram
+            if (user.TelegramId.HasValue)
+            {
+                await _bot.SendTextMessageAsync(
+                    chatId: user.TelegramId.Value,
+                    text: "Поздравляем! Вы успешно верифицированы в нашем сервисе."
+                );
+            }
+
+            return Ok(new { message = "Телеграм подтверждён." });
+=======
+>>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
+        }
+
+        [Authorize]
+        [HttpGet("link-telegram")]
+        public IActionResult GetTelegramLink()
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized();
+
+            var botUsername = "eventthub_bot"; 
+            var link = $"https://t.me/{botUsername}?start={userId.Value}";
+            return Ok(new { link });
+        }
+
+        [Authorize]
+        [HttpPost("start-telegram-verification")]
+        public async Task<IActionResult> StartTelegramVerification()
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) 
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) 
+                return NotFound();
+
+            if (user.TelegramId == null)
+                return BadRequest(new { message = "Сначала привяжите Telegram (link-telegram)." });
+
+            if (user.IsTelegramVerified)
+                return BadRequest(new { message = "Вы уже верифицированы." });
+
+            // Генерируем шестизначный код
+            var code    = new Random().Next(100000, 999999);
+            var expires = DateTime.UtcNow.AddMinutes(10);
+
+            // Сохраняем в базу
+            var tv = new TelegramVerification 
+            {
+                UserId    = user.Id,
+                ChatId    = user.TelegramId.Value,
+                Code      = code,
+                ExpiresAt = expires
+            };
+            _db.TelegramVerifications.Add(tv);
+            await _db.SaveChangesAsync();
+
+            // Отправляем код в Telegram
+            await _bot.SendTextMessageAsync(
+                chatId: user.TelegramId.Value,
+                text: $"Ваш код для верификации: {code} (действует до {expires:u})"
+            );
+
+            return Ok(new 
+            {
+                message   = "Код отправлен в Telegram. Введите его в чате с ботом."
+            });
+        }
+
     }
 }

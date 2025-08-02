@@ -30,7 +30,11 @@ namespace EventHub.Migrations
                 table: "EventComments");
         }
 
+<<<<<<< HEAD
         // Leave Down() empty — schema is not needed on rollback
+=======
+        // оставляем Down() пустым — при откате схема уже не нужна
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         protected override void Down(MigrationBuilder migrationBuilder)
         {
         }

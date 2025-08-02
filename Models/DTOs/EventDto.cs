@@ -23,7 +23,10 @@ namespace EventHub.Models.DTOs
             OrganizerName   = e.Creator!.Name!;
             IsFavorite      = false;
             IsPlanned       = false;
+<<<<<<< HEAD
             CommentsCount   = e.EventComments?.Count ?? 0;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         }
 
         public int Id { get; set; }

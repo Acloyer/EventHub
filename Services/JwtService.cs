@@ -21,17 +21,28 @@ namespace EventHub.Services
         {
             _options = opts.Value;
             if (string.IsNullOrWhiteSpace(_options.Key))
+<<<<<<< HEAD
                 throw new InvalidOperationException("JWT Key is not set in configuration!");
+=======
+                throw new InvalidOperationException("JWT Key не задан в конфигурации!");
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             _keyBytes = Encoding.UTF8.GetBytes(_options.Key);
         }
 
         public string GenerateToken(User user, IList<string>? roles)
         {
+<<<<<<< HEAD
             // if roles == null, replace with empty list
             roles ??= Array.Empty<string>();
 
             // continue working with roles as usual
+=======
+            // если roles == null, заменим на пустой список
+            roles ??= Array.Empty<string>();
+
+            // дальше работаем с roles как обычно
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Email!),
@@ -54,6 +65,7 @@ namespace EventHub.Services
             return new JwtSecurityTokenHandler().WriteToken(jwt);
         }
 
+<<<<<<< HEAD
         /// <summary>
         /// Generates a temporary impersonation token for the Owner to access another user's account
         /// </summary>
@@ -88,5 +100,7 @@ namespace EventHub.Services
             
             return new JwtSecurityTokenHandler().WriteToken(jwt);
         }
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
     }
 }

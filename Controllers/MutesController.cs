@@ -7,7 +7,10 @@ using EventHub.Models.DTOs;
 using EventHub.Models;
 using System.Security.Claims; 
 using Microsoft.AspNetCore.Identity;
+<<<<<<< HEAD
 using Microsoft.EntityFrameworkCore;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
 namespace EventHub.Controllers
 {
@@ -26,6 +29,7 @@ namespace EventHub.Controllers
         [HttpPost, Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> SetMute(int userId, [FromBody] MuteDto dto)
         {
+<<<<<<< HEAD
             var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var currentUser = await _users.FindByIdAsync(currentUserId.ToString());
             var targetUser = await _users.FindByIdAsync(userId.ToString());
@@ -48,6 +52,8 @@ namespace EventHub.Controllers
                 return Forbid("You cannot mute a user with equal or higher rank");
             }
 
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             var entry = await _db.UserMuteEntries.FindAsync(userId);
             if (entry == null)
             {
@@ -57,6 +63,7 @@ namespace EventHub.Controllers
             else
             {
                 entry.IsMuted = dto.IsMuted;
+<<<<<<< HEAD
                 if (!dto.IsMuted)
                 {
                     entry.Until = null; // Reset mute time when unmuting
@@ -69,12 +76,22 @@ namespace EventHub.Controllers
             }
             else{
                 return Ok(new { succeeded = true, message = "User muted." });
+=======
+            }
+            await _db.SaveChangesAsync();
+            if(dto.IsMuted == false){
+                return Ok(new { succeeded = true, message = "Пользователь размучен." });
+            }
+            else{
+                return Ok(new { succeeded = true, message = "Пользователь замучен." });
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             }
         }
 
         [HttpPost("duration"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> SetMuteDuration(int userId, [FromBody] MuteDurationDto dto)
         {
+<<<<<<< HEAD
             var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var currentUser = await _users.FindByIdAsync(currentUserId.ToString());
             var targetUser = await _users.FindByIdAsync(userId.ToString());
@@ -97,6 +114,8 @@ namespace EventHub.Controllers
                 return Forbid("You cannot mute a user with equal or higher rank");
             }
 
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             var entry = await _db.UserMuteEntries.FindAsync(userId);
             if (entry == null)
             {
@@ -105,6 +124,7 @@ namespace EventHub.Controllers
             }
 
             entry.IsMuted = true;
+<<<<<<< HEAD
             var totalSeconds = dto.Seconds + (dto.Minutes * 60) + (dto.Hours * 3600);
             entry.Until = DateTime.UtcNow.AddSeconds(totalSeconds);
 
@@ -132,6 +152,24 @@ namespace EventHub.Controllers
                 period = $"{seconds} секунд{(seconds>1?"":seconds==1?"а":"")}";
 
             var name = targetUser?.Name ?? targetUser?.Email ?? userId.ToString();
+=======
+            entry.Until = DateTime.UtcNow.AddMinutes(dto.Minutes);
+
+            await _db.SaveChangesAsync();
+
+            var hours   = dto.Minutes / 60;
+            var minutes = dto.Minutes % 60;
+            string period;
+            if (hours > 0 && minutes > 0)
+                period = $"{hours} час{(hours>1?"ов":hours==1?"":"")} {minutes} минут{(minutes>1?"":minutes==1?"":"")}";
+            else if (hours > 0)
+                period = $"{hours} час{(hours>1?"ов":hours==1?"":"")}";
+            else
+                period = $"{minutes} минут{(minutes>1?"":minutes==1?"":"")}";
+
+            var user = await _users.FindByIdAsync(userId.ToString());
+            var name = user?.Name ?? user?.Email ?? userId.ToString();
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             return Ok(new
             {
@@ -140,6 +178,7 @@ namespace EventHub.Controllers
             });
         }
 
+<<<<<<< HEAD
         private int GetRoleLevel(IList<string> roles)
         {
             if (roles.Contains("Owner")) return 4;
@@ -149,6 +188,8 @@ namespace EventHub.Controllers
             return 0; // User
         }
 
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         private async Task<UserMuteEntry?> RefreshIfExpired(UserMuteEntry? entry)
         {
             if (entry != null && entry.IsMuted && entry.Until.HasValue)
@@ -196,5 +237,8 @@ namespace EventHub.Controllers
             });
         }
     }
+<<<<<<< HEAD
     
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 }

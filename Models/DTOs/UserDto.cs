@@ -25,9 +25,12 @@ namespace EventHub.Models.DTOs
         public bool NotifyBeforeEvent { get; set; }
         public bool IsBanned { get; set; }
     }
+<<<<<<< HEAD
 
     public class AssignRolesDto
     {
         public List<string> Roles { get; set; } = new();
     }
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 }

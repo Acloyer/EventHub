@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // using System.ComponentModel.DataAnnotations;
 
 // namespace EventHub.Models.DTOs
@@ -30,11 +31,15 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using EventHub.Models;
+=======
+using System.ComponentModel.DataAnnotations;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
 namespace EventHub.Models.DTOs
 {
     public class CommentDto
     {
+<<<<<<< HEAD
         public CommentDto() {}
 
         // Конструктор, если кому удобно
@@ -73,6 +78,18 @@ namespace EventHub.Models.DTOs
         public DateTime? PinnedAt   { get; set; }
     }
 
+=======
+        public int      Id       { get; set; }
+        public int      UserId   { get; set; }
+        [Required, MaxLength(200)]
+        public string Comment { get; set; } = null!;
+        public DateTime PostDate { get; set; }
+        public bool     IsEdited { get; set; }
+        public DateTime? EditDate{ get; set; }
+        public bool     IsPinned { get; set; }
+    }
+    
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
     public class CreateCommentDto
     {
         [Required, MaxLength(200)]
@@ -84,4 +101,8 @@ namespace EventHub.Models.DTOs
         [Required, MaxLength(200)]
         public string Comment { get; set; } = null!;
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17

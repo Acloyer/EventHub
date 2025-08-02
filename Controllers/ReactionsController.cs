@@ -5,7 +5,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using EventHub.Data;
 using EventHub.Models;
+<<<<<<< HEAD
 using EventHub.Services;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 using System.Security.Claims;
 
 namespace EventHub.Controllers
@@ -15,6 +18,7 @@ namespace EventHub.Controllers
     public class ReactionsController : ControllerBase
     {
         private readonly EventHubDbContext _db;
+<<<<<<< HEAD
         private readonly INotificationService _notificationService;
 
         public ReactionsController(EventHubDbContext db, INotificationService notificationService)
@@ -22,6 +26,11 @@ namespace EventHub.Controllers
             _db = db;
             _notificationService = notificationService;
         }
+=======
+
+        public ReactionsController(EventHubDbContext db)
+            => _db = db;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
         [HttpDelete, Authorize]
         public async Task<IActionResult> RemoveMyReaction(int eventId)
@@ -30,7 +39,11 @@ namespace EventHub.Controllers
             var reaction = await _db.PostReactions
                 .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
             if (reaction == null)
+<<<<<<< HEAD
                 return NotFound(new { message = "Reaction not found." });
+=======
+                return NotFound(new { message = "Реакция не найдена." });
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             _db.PostReactions.Remove(reaction);
             await _db.SaveChangesAsync();
@@ -43,13 +56,18 @@ namespace EventHub.Controllers
             var reaction = await _db.PostReactions
                 .FirstOrDefaultAsync(r => r.EventId == eventId && r.UserId == userId);
             if (reaction == null)
+<<<<<<< HEAD
                 return NotFound(new { message = "Reaction not found." });
+=======
+                return NotFound(new { message = "Реакция не найдена." });
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             _db.PostReactions.Remove(reaction);
             await _db.SaveChangesAsync();
             return NoContent();
         }
 
+<<<<<<< HEAD
         // GET /api/events/{eventId}/reactions/counts
         [HttpGet("counts"), AllowAnonymous]
         public async Task<IActionResult> GetReactionCounts(int eventId)
@@ -90,6 +108,8 @@ namespace EventHub.Controllers
             return Ok(reaction);
         }
 
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
         [HttpDelete("~/api/users/{userId}/reactions"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> RemoveAllReactionsForUser(int userId)
         {
@@ -97,7 +117,11 @@ namespace EventHub.Controllers
                 .Where(r => r.UserId == userId)
                 .ToListAsync();
             if (!reactions.Any())
+<<<<<<< HEAD
                 return NotFound(new { message = "User reactions not found." });
+=======
+                return NotFound(new { message = "Реакции пользователя не найдены." });
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
 
             _db.PostReactions.RemoveRange(reactions);
             await _db.SaveChangesAsync();
@@ -137,6 +161,7 @@ namespace EventHub.Controllers
             }
 
             await _db.SaveChangesAsync();
+<<<<<<< HEAD
 
             // Create notification for event creator (if not the same user)
             var eventEntity = await _db.Events.FindAsync(eventId);
@@ -149,6 +174,8 @@ namespace EventHub.Controllers
                 );
             }
 
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
             return NoContent();
         }
     }
