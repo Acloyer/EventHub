@@ -19,9 +19,19 @@ namespace EventHub.Models
         public DateTime? EditDate  { get; set; }
 
         public bool     IsEdited        { get; set; }
+<<<<<<< HEAD
         
         public bool     IsPinned        { get; set; } = false;
         public DateTime? PinnedAt        { get; set; }
+=======
+<<<<<<< HEAD
+        
+        public bool     IsPinned        { get; set; } = false;
+        public DateTime? PinnedAt        { get; set; }
+=======
+        public bool     IsPinned        { get; set; }
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         public int?     ParentCommentId { get; set; }
     }
 }

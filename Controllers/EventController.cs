@@ -23,9 +23,20 @@ namespace EventHub.Controllers
         private readonly EventHubDbContext _db;
         private readonly ILogger<EventController> _logger;
         private readonly UserManager<User> _userManager;
+<<<<<<< HEAD
         private readonly IActivityLogService _activityLogService;
         
         public EventController(EventHubDbContext db, ILogger<EventController> logger, UserManager<User> userManager, IActivityLogService activityLogService)
+=======
+<<<<<<< HEAD
+        private readonly IActivityLogService _activityLogService;
+        
+        public EventController(EventHubDbContext db, ILogger<EventController> logger, UserManager<User> userManager, IActivityLogService activityLogService)
+=======
+        
+        public EventController(EventHubDbContext db, ILogger<EventController> logger, UserManager<User> userManager)
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         {
             _db = db;
             _userManager = userManager;
@@ -41,6 +52,10 @@ namespace EventHub.Controllers
 
         private async Task<bool> IsUserOrganizer(int userId)
         {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null) return false;
             
@@ -96,10 +111,32 @@ namespace EventHub.Controllers
             [FromQuery] DateTime? endDate,
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
+<<<<<<< HEAD
+=======
+=======
+            // через Identity
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+            var roles = await _userManager.GetRolesAsync(user);
+            return roles.Any(r =>
+                r == "Organizer" ||
+                r == "Admin" ||
+                r == "SeniorAdmin" ||
+                r == "Owner");
+        }
+
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<EventDto>>> GetEvents(
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             [FromQuery] string sortBy = "StartDate",
             [FromQuery] string order = "asc")
         {
             var userId = GetCurrentUserId();
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             IQueryable<Event> query = _db.Events
                 .Include(e => e.Creator)
                 .Include(e => e.EventComments);
@@ -133,12 +170,24 @@ namespace EventHub.Controllers
             if (endDate.HasValue)
             {
                 var endUtc = DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc);
+<<<<<<< HEAD
                 // Find events that start before or on the end date (events that occur during the period)
                 query = query.Where(e => e.StartDate <= endUtc);
+=======
+                query = query.Where(e => e.EndDate <= endUtc);
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             }
 
 
             // Apply sorting
+<<<<<<< HEAD
+=======
+=======
+            IQueryable<Event> query = _db.Events.Include(e => e.Creator);
+
+            // Сортировка
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             switch (sortBy)
             {
                 case "Title":
@@ -163,6 +212,10 @@ namespace EventHub.Controllers
                     break;
             }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             // Get total count for pagination
             var totalCount = await query.CountAsync();
             var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -171,6 +224,7 @@ namespace EventHub.Controllers
             var events = await query
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
+<<<<<<< HEAD
                 .ToListAsync();
 
             // Create DTOs with roles
@@ -188,6 +242,47 @@ namespace EventHub.Controllers
                 PageSize = pageSize,
                 TotalPages = totalPages
             });
+=======
+                .ToListAsync();
+
+            // Create DTOs with roles
+            var eventDtos = new List<EventDto>();
+            foreach (var e in events)
+            {
+                eventDtos.Add(await CreateEventDtoWithRoles(e, userId));
+            }
+
+            return Ok(new PaginatedResponse<EventDto>
+            {
+                Items = eventDtos,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages
+            });
+=======
+            var events = await query
+                .Select(e => new EventDto
+                {
+                    Id = e.Id,
+                    Title = e.Title,
+                    Description = e.Description,
+                    StartDate = e.StartDate,
+                    EndDate = e.EndDate,
+                    Category = e.Category,
+                    Location = e.Location,
+                    MaxParticipants = e.MaxParticipants,
+                    OrganizerEmail = e.Creator!.Email,
+                    OrganizerName = e.Creator!.Name,
+                    CreatorId = e.CreatorId,
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                })
+                .ToListAsync();
+
+            return Ok(events);
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
         [HttpGet("{id:int}")]
@@ -197,22 +292,65 @@ namespace EventHub.Controllers
 
             var evt = await _db.Events
                 .Include(e => e.Creator)
+<<<<<<< HEAD
                 .Include(e => e.EventComments)
                 .FirstOrDefaultAsync(e => e.Id == id);
+=======
+<<<<<<< HEAD
+                .Include(e => e.EventComments)
+                .FirstOrDefaultAsync(e => e.Id == id);
+=======
+                .Where(e => e.Id == id)
+                .Select(e => new EventDto
+                {
+                    Id = e.Id,
+                    Title = e.Title,
+                    Description = e.Description,
+                    StartDate = e.StartDate,
+                    EndDate = e.EndDate,
+                    Category = e.Category,
+                    Location = e.Location,
+                    MaxParticipants = e.MaxParticipants,
+                    OrganizerEmail = e.Creator!.Email,
+                    OrganizerName = e.Creator!.Name,
+                    CreatorId = e.CreatorId,
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                })
+                .FirstOrDefaultAsync();
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
             if (evt == null)
             {
                 return NotFound(new { message = "Event not found" });
             }
 
+<<<<<<< HEAD
             var eventDto = await CreateEventDtoWithRoles(evt, userId);
             return Ok(eventDto);
+=======
+<<<<<<< HEAD
+            var eventDto = await CreateEventDtoWithRoles(evt, userId);
+            return Ok(eventDto);
+=======
+            return Ok(evt);
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
 
         /// <summary>
         /// GET: api/Event/category/{category}
+<<<<<<< HEAD
         /// Search events by category
+=======
+<<<<<<< HEAD
+        /// Search events by category
+=======
+        /// Поиск событий по категории
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         /// </summary>
         [HttpGet("category/{category}")]
         public async Task<ActionResult<IEnumerable<EventDto>>> GetByCategory(
@@ -223,10 +361,22 @@ namespace EventHub.Controllers
             var userId = GetCurrentUserId();
             IQueryable<Event> query = _db.Events
                 .Include(e => e.Creator)
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 .Include(e => e.EventComments)
                 .Where(e => e.Category == category);
 
             // Sorting similarly
+<<<<<<< HEAD
+=======
+=======
+                .Where(e => e.Category == category);
+
+            // Сортировка аналогично
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             switch (sortBy)
             {
                 case "Title":
@@ -239,13 +389,25 @@ namespace EventHub.Controllers
                         ? query.OrderByDescending(e => e.EndDate)
                         : query.OrderBy(e => e.EndDate);
                     break;
+<<<<<<< HEAD
                 default: // StartDate and other fields
+=======
+<<<<<<< HEAD
+                default: // StartDate and other fields
+=======
+                default: // StartDate и другие поля
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                     query = order == "desc"
                         ? query.OrderByDescending(e => e.StartDate)
                         : query.OrderBy(e => e.StartDate);
                     break;
             }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var events = await query.ToListAsync();
 
             // Create DTOs with roles
@@ -256,6 +418,20 @@ namespace EventHub.Controllers
             }
 
             return Ok(eventDtos);
+<<<<<<< HEAD
+=======
+=======
+            var events = await query
+                .Select(e => new EventDto(e)
+                {
+                    IsFavorite = userId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId.Value),
+                    IsPlanned = userId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId.Value)
+                })
+                .ToListAsync();
+
+            return Ok(events);
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
         // ADMIN COMMANDS: 
@@ -267,6 +443,7 @@ namespace EventHub.Controllers
             var userId = GetCurrentUserId();
             if (!userId.HasValue)
                 return Unauthorized(new { message = "Authentication required" });
+<<<<<<< HEAD
 
             // Check if user is muted
             var muteEntry = await _db.UserMuteEntries.FindAsync(userId.Value);
@@ -288,6 +465,8 @@ namespace EventHub.Controllers
             {
                 return Forbid("You are currently muted and cannot create events.");
             }
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
             if (!await IsUserOrganizer(userId.Value))
             {
@@ -295,6 +474,10 @@ namespace EventHub.Controllers
                 return Forbid();
             }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             // Validate dates
             var today = DateTime.UtcNow.Date;
             var startDate = DateTime.SpecifyKind(eventDto.StartDate, DateTimeKind.Utc).Date;
@@ -310,6 +493,11 @@ namespace EventHub.Controllers
                 return BadRequest(new { message = "End date cannot be earlier than start date." });
             }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var evt = new Event
             {
                 Title = eventDto.Title,
@@ -325,12 +513,20 @@ namespace EventHub.Controllers
             _db.Events.Add(evt);
             await _db.SaveChangesAsync();
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             // Log event creation
             await _activityLogService.LogEventActivityAsync(
                 userId.Value,
                 "EVENT_CREATED",
                 evt.Id,
                 $"Created event '{evt.Title}' in category '{evt.Category}'",
+<<<<<<< HEAD
+=======
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
 
@@ -341,17 +537,29 @@ namespace EventHub.Controllers
             };
 
             return CreatedAtAction(nameof(GetEvent), new { id = evt.Id }, result);
+<<<<<<< HEAD
+=======
+=======
+            var created = await _db.Events.FindAsync(evt.Id);
+            return CreatedAtAction(nameof(GetEvent), new { id = evt.Id }, new EventDto(created!));
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
         [Authorize]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> UpdateEvent(int id, EventDto eventDto)
         {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             if (id != eventDto.Id)
                 return BadRequest(new { message = "ID mismatch" });
 
             var maybeUserId = GetCurrentUserId();
             if (!maybeUserId.HasValue) 
+<<<<<<< HEAD
                 return Unauthorized(new { message = "Authentication required" });
 
             var userId = maybeUserId.Value;
@@ -376,10 +584,25 @@ namespace EventHub.Controllers
             {
                 return Forbid("You are currently muted and cannot update events.");
             }
+=======
+                return Unauthorized(new { message = "Authentication required" });
+
+            var userId = maybeUserId.Value;
+=======
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized(new { message = "Authentication required" });
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var evt = await _db.Events.FindAsync(id);
             if (evt == null)
                 return NotFound(new { message = "Event not found" });
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             // --- NEW: check creator role vs current user role ---
             var creator = await _userManager.FindByIdAsync(evt.CreatorId.ToString());
             var creatorRoles = await _userManager.GetRolesAsync(creator);
@@ -434,11 +657,29 @@ namespace EventHub.Controllers
             evt.EndDate         = DateTime.SpecifyKind(eventDto.EndDate, DateTimeKind.Utc);
             evt.Category        = eventDto.Category;
             evt.Location        = eventDto.Location;
+<<<<<<< HEAD
+=======
+=======
+            if (evt.CreatorId != userId.Value && !User.IsInRole("Admin"))
+                return Forbid();
+
+            evt.Title = eventDto.Title;
+            evt.Description = eventDto.Description;
+            evt.StartDate = eventDto.StartDate;
+            evt.EndDate = eventDto.EndDate;
+            evt.Category = eventDto.Category;
+            evt.Location = eventDto.Location;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             evt.MaxParticipants = eventDto.MaxParticipants;
 
             try
             {
                 await _db.SaveChangesAsync();
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 
                 // Log event update
                 await _activityLogService.LogEventActivityAsync(
@@ -446,12 +687,22 @@ namespace EventHub.Controllers
                     "EVENT_UPDATED",
                     evt.Id,
                     $"Updated event '{evt.Title}' in category '{evt.Category}'",
+<<<<<<< HEAD
+=======
+                    HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                     HttpContext.Request.Headers["User-Agent"].ToString()
                 );
             }
             catch (DbUpdateConcurrencyException)
             {
                 if (!EventExists(id))
+=======
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_db.Events.Any(e => e.Id == id))
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
                     return NotFound(new { message = "Event not found" });
                 throw;
             }
@@ -463,6 +714,7 @@ namespace EventHub.Controllers
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteEvent(int id)
         {
+<<<<<<< HEAD
             var maybeUserId = GetCurrentUserId();
             if (!maybeUserId.HasValue) 
                 return Unauthorized(new { message = "Authentication required" });
@@ -489,10 +741,28 @@ namespace EventHub.Controllers
             {
                 return Forbid("You are currently muted and cannot delete events.");
             }
+=======
+<<<<<<< HEAD
+            var maybeUserId = GetCurrentUserId();
+            if (!maybeUserId.HasValue)
+                return Unauthorized(new { message = "Authentication required" });
+
+            var userId = maybeUserId.Value;
+=======
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized(new { message = "Authentication required" });
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var evt = await _db.Events.FindAsync(id);
             if (evt == null)
                 return NotFound(new { message = "Event not found" });
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             // Similarly: don't allow deletion if priority is lower than creator's
             var creator = await _userManager.FindByIdAsync(evt.CreatorId.ToString());
             var creatorRoles = await _userManager.GetRolesAsync(creator);
@@ -528,9 +798,21 @@ namespace EventHub.Controllers
                 "EVENT_DELETED",
                 evt.Id,
                 $"Deleted event '{evt.Title}' in category '{evt.Category}'",
+<<<<<<< HEAD
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
 
+=======
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+=======
+            if (evt.CreatorId != userId.Value && !User.IsInRole("Admin"))
+                return Forbid();
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             _db.Events.Remove(evt);
             await _db.SaveChangesAsync();
 
@@ -540,6 +822,10 @@ namespace EventHub.Controllers
         [HttpGet("user/{userId:int}")]
         public async Task<ActionResult<IEnumerable<EventDto>>> GetEventsByUser(int userId)
         {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var currentUserId = GetCurrentUserId();
             var events = await _db.Events
                 .Include(e => e.Creator)
@@ -550,6 +836,14 @@ namespace EventHub.Controllers
                     IsFavorite = currentUserId.HasValue && _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == currentUserId.Value),
                     IsPlanned = currentUserId.HasValue && _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == currentUserId.Value)
                 })
+<<<<<<< HEAD
+=======
+=======
+            var events = await _db.Events
+                .Where(e => e.CreatorId == userId)
+                .Select(e => new EventDto(e))
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 .ToListAsync();
 
             return Ok(events);

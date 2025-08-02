@@ -176,6 +176,10 @@ namespace EventHub.Controllers
                 EntityType = entityType,
                 EntityId = entityId,
                 Details = details,
+<<<<<<< HEAD
+=======
+                IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 UserAgent = HttpContext.Request.Headers["User-Agent"].ToString(),
                 Timestamp = DateTime.UtcNow
             };

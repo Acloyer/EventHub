@@ -127,6 +127,10 @@ namespace EventHub.Controllers
                 organizerId.Value,
                 "USER_ADDED_TO_BLACKLIST",
                 $"Added user {bannedUser.Name} ({bannedUser.Email}) to blacklist. Reason: {dto.Reason ?? "No reason provided"}",
+<<<<<<< HEAD
+=======
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
 
@@ -162,6 +166,10 @@ namespace EventHub.Controllers
                 organizerId.Value,
                 "USER_REMOVED_FROM_BLACKLIST",
                 $"Removed user {blacklistEntry.BannedUser.Name} ({blacklistEntry.BannedUser.Email}) from blacklist",
+<<<<<<< HEAD
+=======
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
 

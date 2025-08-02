@@ -1,6 +1,10 @@
 # EventHub Backend API
 
+<<<<<<< HEAD
 **Version 1.2.1**
+=======
+**Version 1.2**
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
 A comprehensive event management platform built with ASP.NET Core 8.0, featuring role-based access control, real-time notifications, Telegram integration, and advanced user management capabilities.
 

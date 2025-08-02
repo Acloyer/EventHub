@@ -7,8 +7,16 @@ using System.Threading.Tasks;
 using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
+<<<<<<< HEAD
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot;
+=======
+<<<<<<< HEAD
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
 namespace EventHub.Controllers
 {
@@ -18,12 +26,25 @@ namespace EventHub.Controllers
     public class FavoriteEventsController : ControllerBase
     {
         private readonly EventHubDbContext _db;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         private readonly ITelegramBotClient    _bot;
 
         public FavoriteEventsController(EventHubDbContext db, ITelegramBotClient bot)
         {
             _db = db;
             _bot = bot;
+<<<<<<< HEAD
+=======
+=======
+
+        public FavoriteEventsController(EventHubDbContext db)
+        {
+            _db = db;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
         private bool TryGetUserId(out int userId)
@@ -65,6 +86,10 @@ namespace EventHub.Controllers
             if (ev == null)
                 return NotFound("Event not found.");
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             var favorite = await _db.FavoriteEvents
                 .FirstOrDefaultAsync(f => f.UserId == userId && f.EventId == eventId);
 
@@ -76,7 +101,11 @@ namespace EventHub.Controllers
                 var user = await _db.Users.FindAsync(userId);
                 if (user != null && user.TelegramId.HasValue && user.IsTelegramVerified && user.NotifyBeforeEvent)
                 {
+<<<<<<< HEAD
                     var message = $"❌ <b>You removed event</b> «<i>{ev.Title}</i>» from favorites.";
+=======
+                    var message = $"❌ <b>Вы добавили событие</b> «<i>{ev.Title}</i>» удалено из избранного.";
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                     await _bot.SendTextMessageAsync(
                         chatId: user.TelegramId.Value,
                         text: message,
@@ -98,7 +127,11 @@ namespace EventHub.Controllers
                 var user = await _db.Users.FindAsync(userId);
                 if (user != null && user.TelegramId.HasValue && user.IsTelegramVerified && user.NotifyBeforeEvent)
                 {
+<<<<<<< HEAD
                     var message = $"⭐ <b>You added event</b> «<i>{ev.Title}</i>» to favorites!";
+=======
+                    var message = $"⭐ <b>Вы добавили</b> событие «<i>{ev.Title}</i>» добавлено в избранное!";
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                     await _bot.SendTextMessageAsync(
                         chatId: user.TelegramId.Value,
                         text: message,
@@ -136,6 +169,20 @@ namespace EventHub.Controllers
 
             // TEMP: Убери if и просто протестиру
 
+<<<<<<< HEAD
+=======
+=======
+            var exists = await _db.FavoriteEvents
+                .AnyAsync(f => f.UserId == userId && f.EventId == eventId);
+
+            if (!exists)
+            {
+                _db.FavoriteEvents.Add(new FavoriteEvent { UserId = userId, EventId = eventId });
+                await _db.SaveChangesAsync();
+            }
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
             return Ok(new { isFavorite = true });
         }
 
@@ -160,11 +207,22 @@ namespace EventHub.Controllers
 
         // ===== Admin endpoints =====
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+        // GET: api/FavoriteEvents/admin/all
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         [HttpGet("admin/all")]
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> GetAllFavorites()
         {
             var all = await _db.FavoriteEvents
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
                 .Include(f => f.User)
                 .Include(f => f.Event).ThenInclude(e => e.Creator)
                 .ToListAsync();
@@ -179,6 +237,21 @@ namespace EventHub.Controllers
                     Event         = new EventDto(f.Event)
                 })
                 .ToList();
+<<<<<<< HEAD
+=======
+=======
+                .Include(f => f.Event)
+                    .ThenInclude(e => e.Creator)
+                .ToListAsync();
+
+            var result = all.Select(f => new
+            {
+                f.UserId,
+                f.EventId,
+                Event = new EventDto(f.Event)
+            }).ToList();
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
             return Ok(result);
         }

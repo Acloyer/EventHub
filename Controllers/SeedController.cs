@@ -4,7 +4,10 @@ using EventHub.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+<<<<<<< HEAD
 using Microsoft.EntityFrameworkCore;
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
 
 namespace EventHub.Controllers
 {
@@ -13,12 +16,19 @@ namespace EventHub.Controllers
     public class SeedController : ControllerBase
     {
         private readonly ILogger<SeedController> _logger;
+<<<<<<< HEAD
         private readonly EventHubDbContext _db;
 
         public SeedController(ILogger<SeedController> logger, EventHubDbContext db)
         {
             _logger = logger;
             _db = db;
+=======
+
+        public SeedController(ILogger<SeedController> logger)
+        {
+            _logger = logger;
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
         }
 
         [HttpPost("seed")]
@@ -50,6 +60,7 @@ namespace EventHub.Controllers
                 return StatusCode(500, new { message = "Error occurred during database seeding", error = ex.Message });
             }
         }
+<<<<<<< HEAD
 
         [HttpGet("stats")]
         [Authorize(Roles = "Owner")]
@@ -81,5 +92,7 @@ namespace EventHub.Controllers
                 return StatusCode(500, new { message = "Error occurred while getting database stats", error = ex.Message });
             }
         }
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
     }
 } 
