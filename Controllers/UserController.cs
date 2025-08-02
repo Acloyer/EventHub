@@ -1,668 +1,730 @@
-﻿using EventHub.Data;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
+using EventHub.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using Telegram.Bot;
-using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types;
 using Microsoft.Extensions.Logging;
-using EventHub.Services;
+using Microsoft.AspNetCore.Identity;
+using Telegram.Bot;
+using Telegram.Bot.Types;
+using User = EventHub.Models.User;
+using WTelegram;
 
 namespace EventHub.Controllers
 {
+    [Route("api/User")]
+    [Authorize]
     [ApiController]
-    [Route("api/[controller]")]
     public class UserController : ControllerBase
     {
         private readonly EventHubDbContext _db;
+        private readonly IUserService _userService;
+        private readonly UserManager<User> _userManager;
         private readonly ITelegramBotClient _bot;
         private readonly ILogger<UserController> _logger;
-        private readonly ApplicationDbContext _context;
-        private readonly IUserService _userService;
-
+        private readonly IConfiguration _config;
+        private readonly IActivityLogService _activityLogService;
+        private readonly JwtService _jwtService;
+        
         public UserController(
             EventHubDbContext db,
+            IUserService userService,
+            UserManager<User> userManager,
             ITelegramBotClient bot,
             ILogger<UserController> logger,
-            ApplicationDbContext context,
-            IUserService userService)
+            IConfiguration config,
+            IActivityLogService activityLogService,
+            JwtService jwtService)
         {
             _db = db;
+            _userService = userService;
+            _userManager = userManager;
             _bot = bot;
             _logger = logger;
-            _context = context;
-            _userService = userService;
+            _config = config;
+            _activityLogService = activityLogService;
+            _jwtService = jwtService;
         }
 
         private int? GetCurrentUserId()
         {
-            try
-            {
-                if (User.Identity?.IsAuthenticated != true)
-                    return null;
-
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                return userIdClaim != null ? int.Parse(userIdClaim.Value) : null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting current user ID");
-                return null;
-            }
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(claim, out var id) ? id : null;
         }
 
-        [HttpPost("register")]
-        public async Task<ActionResult<UserDto>> Register(UserRegisterDto registerDto)
+        /// <summary>
+        /// Extracts userId from JWT claim NameIdentifier
+        /// </summary>
+        private bool TryGetUserId(out int userId)
         {
-            try
-            {
-                var result = await _userService.Register(registerDto);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during user registration");
-                return StatusCode(500, new { message = "An error occurred during registration" });
-            }
+            var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(raw, out userId);
         }
 
-        [HttpPost("login")]
-        public async Task<ActionResult<UserDto>> Login(UserLoginDto loginDto)
+        private static readonly Dictionary<string, int> RolePriority = new()
         {
-            try
-            {
-                var result = await _userService.Login(loginDto);
-                if (result == null)
-                    return Unauthorized(new { message = "Invalid email or password" });
+            ["Owner"] = 4,
+            ["SeniorAdmin"] = 3,
+            ["Admin"] = 2,
+            ["Organizer"] = 1,
+            ["User"] = 0
+        };
 
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during user login");
-                return StatusCode(500, new { message = "An error occurred during login" });
-            }
-        }
-
-        // GET api/User/Profile
-        [Authorize]
-        [HttpGet("Profile")]
+        /// <summary>
+        /// GET: api/User/profile
+        /// Returns profile by userId from token
+        /// </summary>
+        [HttpGet("profile")]
         public async Task<IActionResult> GetProfile()
         {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+                return NotFound();
+
+            var roles = await _userManager.GetRolesAsync(user);
+            return Ok(new UserProfileDto
             {
-                _logger.LogWarning("Could not extract user ID from token");
-                return Unauthorized(new { message = "Invalid token format" });
+                Id = user.Id,
+                Email = user.Email,
+                Name = user.Name,
+                IsBanned = user.IsBanned,
+                Roles = roles.ToArray(),
+                TelegramId = user.TelegramId,
+                IsTelegramVerified = user.IsTelegramVerified,
+                NotifyBeforeEvent = user.NotifyBeforeEvent
+            });
+        }
+
+        // PATCH: api/Admin/Users/{userId}/telegram
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        [HttpPatch("{userId:int}/telegram")]
+        public async Task<IActionResult> SetTelegramId(int userId, [FromBody] long telegramId)
+        {
+            var currentUser = GetCurrentUserId();
+            if (!currentUser.HasValue) return Unauthorized();
+            
+            // Check if user is trying to modify themselves
+            if (currentUser.Value == userId) 
+                return BadRequest(new { message = "Cannot modify yourself through admin panel" });
+
+            var currentUserEntity = await _userManager.FindByIdAsync(currentUser.Value.ToString());
+            var targetUser = await _userManager.FindByIdAsync(userId.ToString());
+            if (targetUser == null)
+                return NotFound("User not found.");
+
+            // Check role hierarchy
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUserEntity);
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
+
+            var currentUserMaxRole = currentUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var targetUserMaxRole = targetUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            // Cannot modify user with higher rank
+            if (targetUserMaxRole > currentUserMaxRole)
+                return Forbid("Cannot modify user with higher role");
+
+            targetUser.TelegramId = telegramId;
+            await _userManager.UpdateAsync(targetUser);
+
+            // Log Telegram ID change
+            await _activityLogService.LogUserActivityAsync(
+                currentUser.Value,
+                "USER_TELEGRAM_UPDATED",
+                $"Telegram ID {telegramId} set for user {targetUser.Email} by {currentUserEntity.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            return Ok(new { message = $"Telegram ID {telegramId} set for user {targetUser.Email}" });
+        }
+
+        /// <summary>
+        /// GET: api/User/created-events
+        /// Returns events created by the current user
+        /// </summary>
+        [HttpGet("created-events")]
+        public async Task<IActionResult> GetCreatedEvents([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchTerm = null)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            if (pageNumber <= 0 || pageSize <= 0)
+                return BadRequest("Invalid pagination parameters.");
+
+            var query = _db.Events
+                .Include(e => e.Creator)
+                .Where(e => e.CreatorId == userId);
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                query = query.Where(e =>
+                    e.Title.Contains(searchTerm) ||
+                    e.Description.Contains(searchTerm) ||
+                    e.Category.Contains(searchTerm));
             }
 
-            var user = await _db.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-            if (user == null)
+            var events = await query
+                .OrderByDescending(e => e.StartDate)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var eventDtos = events.Select(e => new EventDto(e)).ToList();
+
+            return Ok(new
             {
-                _logger.LogWarning($"User with ID {userId} not found");
-                return NotFound(new { message = "User not found" });
+                Items = eventDtos,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            });
+        }
+
+        [Authorize]
+        [HttpPost("set-notify")]
+        public async Task<IActionResult> SetNotify([FromBody] bool notify)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound();
+
+            user.NotifyBeforeEvent = notify;
+            await _userManager.UpdateAsync(user);
+            return Ok(new { notify });
+        }
+
+        // [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        [HttpGet("all")]
+        public async Task<IActionResult> GetAllUsers([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10, [FromQuery] string? searchTerm = null)
+        {
+            if (pageNumber <= 0 || pageSize <= 0)
+                return BadRequest("Invalid pagination parameters.");
+
+            var query = _db.Users.AsQueryable();
+
+            if (!string.IsNullOrEmpty(searchTerm))
+            {
+                query = query.Where(u =>
+                    u.Name.Contains(searchTerm) ||
+                    u.Email.Contains(searchTerm));
+            }
+
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var users = await query
+                .OrderBy(u => u.Id)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            // Load roles separately
+            var userDtos = new List<UserDto>();
+            foreach (var user in users)
+            {
+                var dto = new UserDto(user);
+                dto.Roles = (await _userManager.GetRolesAsync(user)).ToList();
+                userDtos.Add(dto);
             }
 
             return Ok(new
             {
-                user.Id,
-                user.Email,
-                Roles = user.UserRoles?
-                    .Where(ur => ur.Role != null)
-                    .Select(ur => ur.Role!.Name)
-                    .ToArray() 
-                        ?? Array.Empty<string>(),
-                user.TelegramId,
-                user.IsTelegramVerified,
-                user.NotifyBeforeEvent
+                Items = userDtos,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                PageNumber = pageNumber,
+                PageSize = pageSize
             });
         }
-
-        // GET api/User/CreatedEvents
-        [Authorize]
-        [HttpGet("CreatedEvents")]
-        public async Task<IActionResult> GetCreatedEvents()
-        {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
-            {
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            var eventsData = await _db.Events
-                .Include(e => e.Creator)
-                    .ThenInclude(u => u!.UserRoles)
-                        .ThenInclude(ur => ur.Role)
-                .Where(e => e.CreatorId == userId)
-                .ToListAsync();
-
-            var eventDtos = eventsData.Select(e => new EventDto
-            {
-                Id = e.Id,
-                Title = e.Title,
-                Description = e.Description,
-                StartDate = e.StartDate,
-                EndDate = e.EndDate,
-                Category = e.Category,
-                Location = e.Location,
-                MaxParticipants = e.MaxParticipants,
-                // Creator = e.Creator != null
-                //     ? new UserDto
-                //     {
-                //         Id = e.Creator.Id,
-                //         Email = e.Creator.Email,
-                //         Roles = e.Creator.UserRoles
-                //             .Where(ur => ur.Role != null)
-                //             .Select(ur => ur.Role!.Name)
-                //             .ToArray()
-                //     }
-                //     : null,
-                // Здесь мы ВНЕ Select-запроса — контекст уже не конфликтует
-                IsFavorite = _db.FavoriteEvents.Any(f => f.EventId == e.Id && f.UserId == userId),
-                IsPlanned = _db.PlannedEvents.Any(p => p.EventId == e.Id && p.UserId == userId)
-            }).ToList();
-
-
-            return Ok(eventDtos);
-        }
-
-        // GET api/User/Favorites
-        [Authorize]
-        [HttpGet("Favorites")]
-        public async Task<ActionResult<IEnumerable<EventDto>>> GetFavoriteEvents()
-        {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to get favorite events without valid user ID");
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            try
-            {
-                var favoriteEvents = await _context.Events
-                    .Include(e => e.Creator)
-                        .ThenInclude(u => u!.UserRoles)
-                            .ThenInclude(ur => ur.Role)
-                    .Where(e => _context.FavoriteEvents
-                        .Any(f => f.EventId == e.Id && f.UserId == userId))
-                    .Select(e => new EventDto
-                    {
-                        Id = e.Id,
-                        Title = e.Title,
-                        Description = e.Description,
-                        StartDate = e.StartDate,
-                        EndDate = e.EndDate,
-                        Category = e.Category,
-                        Location = e.Location,
-                        MaxParticipants = e.MaxParticipants,
-                        // Creator = new UserDto
-                        // {
-                        //     Id = e.Creator!.Id,
-                        //     Email = e.Creator.Email,
-                            // Roles = e.Creator.UserRoles
-                            //     .Where(ur => ur.Role != null)
-                            //     .Select(ur => ur.Role!.Name)
-                            //     .ToArray()
-                        // },
-                        IsFavorite = true,
-                        IsPlanned = _context.PlannedEvents
-                            .Any(p => p.EventId == e.Id && p.UserId == userId)
-                    })
-                    .ToListAsync();
-
-                return Ok(favoriteEvents);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting favorite events for user {UserId}", userId);
-                return StatusCode(500, new { message = "An error occurred while retrieving favorite events" });
-            }
-        }
-
-        // GET api/User/Planned
-        [Authorize]
-        [HttpGet("Planned")]
-        public async Task<ActionResult<IEnumerable<EventDto>>> GetPlannedEvents()
-        {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to get planned events without valid user ID");
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            try
-            {
-                var plannedEvents = await _context.Events
-                    .Include(e => e.Creator)
-                        .ThenInclude(u => u!.UserRoles)
-                            .ThenInclude(ur => ur.Role)
-                    .Where(e => _context.PlannedEvents
-                        .Any(p => p.EventId == e.Id && p.UserId == userId))
-                    .Select(e => new EventDto
-                    {
-                        Id = e.Id,
-                        Title = e.Title,
-                        Description = e.Description,
-                        StartDate = e.StartDate,
-                        EndDate = e.EndDate,
-                        Category = e.Category,
-                        Location = e.Location,
-                        MaxParticipants = e.MaxParticipants,
-
-                        // 
-                        // Creator = e.Creator != null
-                        //     ? new UserDto
-                        //     {
-                        //         Id = e.Creator.Id,
-                        //         Email = e.Creator.Email,
-                        //         Roles = e.Creator.UserRoles
-                        //             .Where(ur => ur.Role != null)
-                        //             .Select(ur => ur.Role!.Name)
-                        //             .ToArray()
-                        //     }
-                        //     : null,
-
-                        IsFavorite = _context.FavoriteEvents
-                            .Any(f => f.EventId == e.Id && f.UserId == userId),
-                        IsPlanned = true
-                    })
-                    .ToListAsync();
-
-                return Ok(plannedEvents);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting planned events for user {UserId}", userId);
-                return StatusCode(500, new { message = "An error occurred while retrieving planned events" });
-            }
-        }
-
-        // POST api/User/link-telegram/{chatId}
-        [HttpPost("link-telegram/{chatId}")]
-        public async Task<IActionResult> LinkTelegram(string chatId)
-        {
-            var userId = GetCurrentUserId();
-            var user = await _db.Users.FindAsync(userId);
-            if (user == null) return Unauthorized();
-
-            // generate 6-digit code
-            var code = new Random().Next(100000, 999999).ToString();
-            user.TelegramId = chatId;
-            user.TelegramCode = code;
-            user.IsTelegramVerified = false;
-            await _db.SaveChangesAsync();
-
-            // send code via Bot
-            await _bot.SendTextMessageAsync(
-                chatId: chatId,
-                text: $"🚀 Your verification code: *{code}*\n\n" +
-                      "Please enter this code in the app to complete linking.",
-                parseMode: ParseMode.Markdown
-            );
-
-            return Ok("Verification code sent to Telegram");
-        }
-
-        // POST api/User/confirm-telegram
-        [HttpPost("confirm-telegram")]
-        public async Task<IActionResult> ConfirmTelegram([FromBody] string code)
-        {
-            var userId = GetCurrentUserId();
-            var user = await _db.Users.FindAsync(userId);
-            if (user == null) return Unauthorized();
-
-            if (user.TelegramCode != code)
-                return BadRequest("Invalid verification code");
-
-            user.IsTelegramVerified = true;
-            user.TelegramCode = null;
-            await _db.SaveChangesAsync();
-
-            return Ok("Telegram linked successfully");
-        }
-
-        // POST api/User/set-notify
-        [HttpPost("set-notify")]
-        public async Task<IActionResult> SetNotificationPreference([FromBody] bool notify)
-        {
-            var userId = GetCurrentUserId();
-            var user = await _db.Users.FindAsync(userId);
-            if (user == null) return NotFound();
-
-            user.NotifyBeforeEvent = notify;
-            await _db.SaveChangesAsync();
-            return Ok(new { user.NotifyBeforeEvent });
-        }
-
-        // Admin endpoints
-
-        // GET api/User/All
-        [HttpGet("All")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> GetAllUsers()
-        {
-            var users = await _db.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .Select(u => new
-                {
-                    u.Id,
-                    u.Email,
-                    Roles = u.UserRoles
-                        .Where(ur => ur.Role != null)
-                        .Select(ur => ur.Role!.Name),
-                    u.TelegramId,
-                    u.IsTelegramVerified,
-                    u.NotifyBeforeEvent
-                })
-                .ToListAsync();
-
-            return Ok(users);
-        }
-
-        // POST api/User/{userId}/SetRole
-        [HttpPost("{userId}/SetRole")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> SetUserRole(int userId, [FromBody] string roleName)
-        {
-            var user = await _db.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .FirstOrDefaultAsync(u => u.Id == userId);
-
+    
+        [HttpGet("{id}")]
+        // [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetUser(int id)
+        {   
+            var user = await _userManager.Users.FirstOrDefaultAsync(u => u.Id == id);
             if (user == null)
-                return NotFound("User not found");
+                return NotFound();
 
-            var role = await _db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
-            if (role == null)
-                return BadRequest("Invalid role name");
+            var roles = await _userManager.GetRolesAsync(user);
 
-            // Remove existing roles
-            _db.UserRoles.RemoveRange(user.UserRoles);
+            // Get current userId from token
+            var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            bool isSelf = currentUserIdClaim != null && int.TryParse(currentUserIdClaim, out var currentUserId) && currentUserId == id;
 
-            // Add new role
-            user.UserRoles.Add(new UserRole
+            var userDto = new UserDto(user)
             {
-                UserId = userId,
-                RoleId = role.Id,
-                User = user,
-                Role = role
-            });
-            await _db.SaveChangesAsync();
+                Roles = roles.ToList()
+            };
 
-            return Ok(new { Message = "Role updated successfully" });
+            if (isSelf)
+                userDto.Roles.Insert(0, "You");
+
+            return Ok(userDto);
         }
-
-        // DELETE api/User/{id}
+        
         [HttpDelete("{id}")]
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found" });
-            }
+            var currentUser = GetCurrentUserId();
+            if (!currentUser.HasValue) return Unauthorized();
+            
+            // Check if user is trying to delete themselves
+            if (currentUser.Value == id) 
+                return BadRequest(new { message = "Cannot delete yourself" });
 
-            // Prevent deleting yourself
-            var currentUserId = GetCurrentUserId();
-            if (id == currentUserId)
-            {
-                return BadRequest(new { message = "Cannot delete your own account" });
-            }
+            // Check role hierarchy
+            var currentUserEntity = await _userManager.FindByIdAsync(currentUser.Value.ToString());
+            var targetUser = await _userManager.FindByIdAsync(id.ToString());
+            
+            if (targetUser == null) return NotFound();
 
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUserEntity);
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
+
+            var currentUserMaxRole = currentUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var targetUserMaxRole = targetUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            // Cannot delete user with higher rank
+            if (targetUserMaxRole > currentUserMaxRole)
+                return Forbid("Cannot delete user with higher role");
+
+            // Log user deletion
+            await _activityLogService.LogUserActivityAsync(
+                currentUser.Value,
+                "USER_DELETED",
+                $"User {targetUser.Name} ({targetUser.Email}) was deleted by {currentUserEntity.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            await _userManager.DeleteAsync(targetUser);
             return NoContent();
         }
 
-        [Authorize]
-        [HttpPost("favorites/{eventId}")]
-        public async Task<IActionResult> ToggleFavorite(int eventId)
-        {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to toggle favorite without valid user ID");
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            try
-            {
-                var user = await _context.Users.FindAsync(userId.Value);
-                var eventEntity = await _context.Events.FindAsync(eventId);
-
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found");
-                    return NotFound(new { message = "User not found" });
-                }
-
-                if (eventEntity == null)
-                {
-                    _logger.LogWarning("Event not found");
-                    return NotFound(new { message = "Event not found" });
-                }
-
-                var favorite = await _context.FavoriteEvents
-                    .FirstOrDefaultAsync(f => f.EventId == eventId && f.UserId == userId.Value);
-
-                if (favorite != null)
-                {
-                    _context.FavoriteEvents.Remove(favorite);
-                }
-                else
-                {
-                    favorite = new FavoriteEvent
-                    {
-                        UserId = userId.Value,
-                        EventId = eventId,
-                        User = user,
-                        Event = eventEntity
-                    };
-                    _context.FavoriteEvents.Add(favorite);
-                }
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = favorite != null ? "Removed from favorites" : "Added to favorites" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error toggling favorite for user {UserId} and event {EventId}", userId, eventId);
-                return StatusCode(500, new { message = "An error occurred while updating favorites" });
-            }
-        }
-
-        [Authorize]
-        [HttpPost("planned/{eventId}")]
-        public async Task<IActionResult> TogglePlanned(int eventId)
-        {
-            var userId = GetCurrentUserId();
-            if (!userId.HasValue)
-            {
-                _logger.LogWarning("Attempt to toggle planned without valid user ID");
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            try
-            {
-                var user = await _context.Users.FindAsync(userId.Value);
-                var eventEntity = await _context.Events.FindAsync(eventId);
-
-                if (user == null)
-                {
-                    _logger.LogWarning("User not found");
-                    return NotFound(new { message = "User not found" });
-                }
-
-                if (eventEntity == null)
-                {
-                    _logger.LogWarning("Event not found");
-                    return NotFound(new { message = "Event not found" });
-                }
-
-                var planned = await _context.PlannedEvents
-                    .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == userId.Value);
-
-                if (planned != null)
-                {
-                    _context.PlannedEvents.Remove(planned);
-                }
-                else
-                {
-                    planned = new PlannedEvent
-                    {
-                        UserId = userId.Value,
-                        EventId = eventId,
-                        User = user,
-                        Event = eventEntity
-                    };
-                    _context.PlannedEvents.Add(planned);
-                }
-
-                await _context.SaveChangesAsync();
-                return Ok(new { message = planned != null ? "Removed from planned" : "Added to planned" });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error toggling planned for user {UserId} and event {EventId}", userId, eventId);
-                return StatusCode(500, new { message = "An error occurred while updating planned events" });
-            }
-        }
-
-        [HttpGet]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
-        {
-            var users = await _context.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .Select(u => new UserDto
-                {
-                    Id = u.Id,
-                    Email = u.Email,
-                    TelegramId = u.TelegramId,
-                    IsTelegramVerified = u.IsTelegramVerified,
-                    NotifyBeforeEvent = u.NotifyBeforeEvent,
-                    Roles = u.UserRoles
-                        .Where(ur => ur.Role != null)
-                        .Select(ur => ur.Role!.Name)
-                        .ToArray()
-                })
-                .ToListAsync();
-
-            return users;
-        }
-
-        [HttpGet("{id}")]
-        [Authorize]
-        public async Task<ActionResult<UserDto>> GetUser(int id)
-        {
-            var currentUserId = GetCurrentUserId();
-            if (!currentUserId.HasValue)
-            {
-                return Unauthorized(new { message = "Authentication required" });
-            }
-
-            if (currentUserId != id && !User.IsInRole("Admin"))
-            {
-                return Forbid();
-            }
-
-            var user = await _context.Users
-                .Include(u => u.UserRoles)
-                    .ThenInclude(ur => ur.Role)
-                .Where(u => u.Id == id)
-                .Select(u => new UserDto
-                {
-                    Id = u.Id,
-                    Email = u.Email,
-                    TelegramId = u.TelegramId,
-                    IsTelegramVerified = u.IsTelegramVerified,
-                    NotifyBeforeEvent = u.NotifyBeforeEvent,
-                    Roles = u.UserRoles
-                        .Where(ur => ur.Role != null)
-                        .Select(ur => ur.Role!.Name)
-                        .ToArray()
-                })
-                .FirstOrDefaultAsync();
-
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found" });
-            }
-
-            return user;
-        }
-
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         [HttpPost("{id}/toggle-ban")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
         public async Task<IActionResult> ToggleBan(int id)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound();
+            var currentUser = GetCurrentUserId();
+            if (!currentUser.HasValue) return Unauthorized();
+            
+            // Check if user is trying to ban themselves
+            if (currentUser.Value == id) 
+                return BadRequest(new { message = "Cannot ban/unban yourself" });
 
-            user.IsBanned = !user.IsBanned;
-            await _context.SaveChangesAsync();
-            return Ok(new { user.Id, user.IsBanned });
+            var currentUserEntity = await _userManager.FindByIdAsync(currentUser.Value.ToString());
+            var targetUser = await _userManager.FindByIdAsync(id.ToString());
+            if (targetUser == null) return NotFound();
+
+            // Check role hierarchy
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUserEntity);
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
+
+            var currentUserMaxRole = currentUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var targetUserMaxRole = targetUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            // Cannot ban user with higher rank
+            if (targetUserMaxRole > currentUserMaxRole)
+                return Forbid("Cannot ban/unban user with higher role");
+            
+            var wasBanned = targetUser.IsBanned;
+            targetUser.IsBanned = !targetUser.IsBanned;
+            await _userManager.UpdateAsync(targetUser);
+            
+            // Log ban status change
+            await _activityLogService.LogUserActivityAsync(
+                currentUser.Value,
+                wasBanned ? "USER_UNBANNED" : "USER_BANNED",
+                $"User {targetUser.Name} ({targetUser.Email}) was {(wasBanned ? "unbanned" : "banned")} by {currentUserEntity.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+            
+            return Ok(new { targetUser.IsBanned });
         }
 
         [HttpPut("{id}")]
-        [Authorize]
         [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> UpdateUser(int id, UserUpdateDto userDto)
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UserUpdateDto dto)
         {
-            var currentUserId = GetCurrentUserId();
-            if (!currentUserId.HasValue)
-            {
-                return Unauthorized(new { message = "Authentication required" });
-            }
+            var currentUser = GetCurrentUserId();
+            if (!currentUser.HasValue) return Unauthorized();
+            
+            // Check if user is trying to modify themselves
+            if (currentUser.Value == id) 
+                return BadRequest(new { message = "Cannot modify yourself through admin panel" });
 
-            if (currentUserId != id && !User.IsInRole("Admin"))
-            {
-                return Forbid();
-            }
+            var currentUserEntity = await _userManager.FindByIdAsync(currentUser.Value.ToString());
+            var targetUser = await _userManager.FindByIdAsync(id.ToString());
+            if (targetUser == null) return NotFound();
 
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found" });
-            }
+            // Check role hierarchy
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUserEntity);
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
 
-            user.TelegramId = userDto.TelegramId;
-            user.IsTelegramVerified = userDto.IsTelegramVerified;
-            user.NotifyBeforeEvent = userDto.NotifyBeforeEvent;
+            var currentUserMaxRole = currentUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                _logger.LogError(ex, $"Concurrency error updating user {id}");
-                if (!UserExists(id))
-                    return NotFound(new { message = "User not found" });
-                throw;
-            }
+            var targetUserMaxRole = targetUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
 
+            // Cannot modify user with higher rank
+            if (targetUserMaxRole > currentUserMaxRole)
+                return Forbid("Cannot modify user with higher role");
+
+            targetUser.Name = dto.Name;
+            targetUser.IsBanned = dto.IsBanned;
+            targetUser.TelegramId = dto.TelegramId;
+            targetUser.IsTelegramVerified = dto.IsTelegramVerified;
+            targetUser.NotifyBeforeEvent = dto.NotifyBeforeEvent;
+
+            await _userManager.UpdateAsync(targetUser);
+            
+            // Log user modification
+            await _activityLogService.LogUserActivityAsync(
+                currentUser.Value,
+                "USER_UPDATED",
+                $"User {targetUser.Name} ({targetUser.Email}) was updated by {currentUserEntity.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+            
             return NoContent();
         }
 
-        private bool UserExists(int id)
+        [Authorize]
+        [HttpPut("profile")]
+        public async Task<IActionResult> UpdateProfile([FromBody] ProfileUpdateDto dto)
         {
-            return _context.Users.Any(e => e.Id == id);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound();
+
+            // Apply only safe fields for yourself:
+            if (!string.IsNullOrWhiteSpace(dto.Name))
+                user.Name = dto.Name;
+
+            if (!string.IsNullOrWhiteSpace(dto.Email) && dto.Email != user.Email)
+            {
+                if (await _userManager.FindByEmailAsync(dto.Email) != null)
+                    return BadRequest("Email is already taken");
+                user.Email    = dto.Email;
+                user.UserName = dto.Email;
+            }
+
+            user.TelegramId        = dto.TelegramId;
+            user.NotifyBeforeEvent = dto.NotifyBeforeEvent;
+            // user.IsBanned - don't touch!
+
+            var res = await _userManager.UpdateAsync(user);
+            if (!res.Succeeded) return BadRequest(res.Errors);
+
+            return Ok(new UserDto(user));
+        }
+
+        [Authorize]
+        [HttpGet("link-telegram")]
+        public IActionResult GetTelegramLink()
+        {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+                return Unauthorized();
+
+            var botUsername = "eventthub_bot"; 
+            var link = $"https://t.me/{botUsername}?start={userId.Value}";
+            return Ok(new { LinkUrl = link });
+        }
+
+                
+        [Authorize]
+        [HttpPost("confirm-telegram")]
+        public async Task<IActionResult> ConfirmTelegramCode([FromBody] ConfirmTelegramCodeDto dto)
+        {
+            // 1) Get user from token
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) 
+                return Unauthorized();
+
+            // 2) Check that code matches
+            if (user.TelegramCode != dto.Code)
+                return BadRequest(new { message = "Invalid code." });
+
+            // 3) Complete verification
+            user.IsTelegramVerified = true;
+            user.TelegramCode       = null;
+            await _userManager.UpdateAsync(user);
+
+            // 4) Send congratulations to Telegram
+            if (user.TelegramId.HasValue)
+            {
+                await _bot.SendTextMessageAsync(
+                    chatId: user.TelegramId.Value,
+                    text: "Congratulations! You have been successfully verified in our service."
+                );
+            }
+
+            return Ok(new { message = "Telegram confirmed." });
+        }
+
+        [Authorize]
+        [HttpPost("{userId:int}/start-delete-confirmation")]
+        public async Task<IActionResult> StartDeleteConfirmation(int userId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue || currentUserId.Value != userId)
+                return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+                return NotFound();
+
+            if (!user.IsTelegramVerified)
+                return BadRequest(new { message = "User must be Telegram verified to perform this action." });
+
+            // Generate confirmation code
+            var random = new Random();
+            var confirmationCode = random.Next(100000, 999999);
+            user.TelegramCode = confirmationCode;
+            await _userManager.UpdateAsync(user);
+
+            // Send confirmation code to Telegram
+            if (user.TelegramId.HasValue)
+            {
+                await _bot.SendTextMessageAsync(
+                    chatId: user.TelegramId.Value,
+                    text: $"⚠️ Database deletion confirmation code:\n\n{confirmationCode}\n\nThis code is required to confirm the deletion of all database data."
+                );
+            }
+
+            return Ok(new { message = "Confirmation code sent to Telegram." });
+        }
+
+        [Authorize]
+        [HttpPost("start-seed-confirmation")]
+        public async Task<IActionResult> StartSeedConfirmation()
+        {
+            // 1) Get user from token
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) 
+                return Unauthorized();
+
+            // 2) Check if user has Telegram connected
+            if (!user.TelegramId.HasValue)
+                return BadRequest(new { message = "Telegram not connected. Please connect Telegram in your profile first." });
+
+            // 3) Generate confirmation code
+            var random = new Random();
+            var confirmationCode = random.Next(100000, 999999);
+            user.TelegramCode = confirmationCode;
+            await _userManager.UpdateAsync(user);
+
+            // Send confirmation code to Telegram
+            if (user.TelegramId.HasValue)
+            {
+                await _bot.SendTextMessageAsync(
+                    chatId: user.TelegramId.Value,
+                    text: $"🔐 Database access confirmation code:\n\n{confirmationCode}\n\nThis code is required to access database management operations."
+                );
+            }
+
+            return Ok(new { message = "Confirmation code sent to Telegram." });
+        }
+
+        [Authorize]
+        [HttpPost("confirm-delete")]
+        public async Task<IActionResult> ConfirmDeleteCode([FromBody] ConfirmTelegramCodeDto dto)
+        {
+            // 1) Get user from token
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) 
+                return Unauthorized();
+
+            // 2) Check that code matches
+            if (user.TelegramCode != dto.Code)
+                return BadRequest(new { message = "Invalid confirmation code." });
+
+            // 3) Clear the code
+            user.TelegramCode = null;
+            await _userManager.UpdateAsync(user);
+
+            return Ok(new { message = "Delete confirmation successful." });
+        }
+
+        /// <summary>
+        /// POST: api/User/impersonate/{targetUserId}
+        /// Allows Owner to impersonate another user by generating a temporary token
+        /// </summary>
+        [Authorize(Roles = "Owner")]
+        [HttpPost("impersonate/{targetUserId:int}")]
+        public async Task<IActionResult> ImpersonateUser(int targetUserId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue) return Unauthorized();
+
+            // Get current user (Owner)
+            var currentUser = await _userManager.FindByIdAsync(currentUserId.Value.ToString());
+            if (currentUser == null) return NotFound("Current user not found");
+
+            // Get target user
+            var targetUser = await _userManager.FindByIdAsync(targetUserId.ToString());
+            if (targetUser == null) return NotFound("Target user not found");
+
+            // Prevent self-impersonation
+            if (currentUserId.Value == targetUserId)
+                return BadRequest(new { message = "You cannot impersonate yourself" });
+
+            // Get target user roles
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
+
+            // Generate impersonation token
+            var impersonationToken = _jwtService.GenerateImpersonationToken(targetUser, targetUserRoles, currentUserId.Value);
+
+            // Log the impersonation action
+            await _activityLogService.LogUserActivityAsync(
+                currentUserId.Value,
+                "USER_IMPERSONATION",
+                $"Owner {currentUser.Name} ({currentUser.Email}) impersonated user {targetUser.Name} ({targetUser.Email})",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            return Ok(new
+            {
+                message = $"Successfully generated impersonation token for {targetUser.Name}",
+                impersonationToken = impersonationToken,
+                targetUser = new UserDto(targetUser)
+                {
+                    Roles = targetUserRoles.ToList()
+                }
+            });
+        }
+
+        /// <summary>
+        /// GET: api/User/roles
+        /// Returns all available roles
+        /// </summary>
+        [HttpGet("roles")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetRoles()
+        {
+            var roles = await _db.Roles.ToListAsync();
+            return Ok(roles.Select(r => new { r.Id, r.Name }));
+        }
+
+        /// <summary>
+        /// POST: api/User/{userId}/roles
+        /// Assigns roles to a user
+        /// </summary>
+        [HttpPost("{userId:int}/roles")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> AssignRoles(int userId, [FromBody] AssignRolesDto dto)
+        {
+            var currentUser = GetCurrentUserId();
+            if (!currentUser.HasValue) return Unauthorized();
+            
+            // Check if user is trying to modify themselves
+            if (currentUser.Value == userId) 
+                return BadRequest(new { message = "Cannot modify your own roles through admin panel" });
+
+            var currentUserEntity = await _userManager.FindByIdAsync(currentUser.Value.ToString());
+            var targetUser = await _userManager.FindByIdAsync(userId.ToString());
+            if (targetUser == null) return NotFound();
+
+            // Check role hierarchy
+            var currentUserRoles = await _userManager.GetRolesAsync(currentUserEntity);
+            var targetUserRoles = await _userManager.GetRolesAsync(targetUser);
+
+            var currentUserMaxRole = currentUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            var targetUserMaxRole = targetUserRoles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            // Cannot modify roles of user with higher rank
+            if (targetUserMaxRole > currentUserMaxRole)
+                return Forbid("Cannot modify roles of user with higher role");
+
+            // Check that user is not trying to assign roles higher than their own
+            var newRolesMaxPriority = dto.Roles
+                .Select(r => RolePriority.GetValueOrDefault(r, 0))
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if (newRolesMaxPriority > currentUserMaxRole)
+                return Forbid("Cannot assign roles higher than your own");
+
+            // Remove all current roles
+            var currentRoles = await _userManager.GetRolesAsync(targetUser);
+            if (currentRoles.Any())
+            {
+                await _userManager.RemoveFromRolesAsync(targetUser, currentRoles);
+            }
+
+            // Add new roles
+            if (dto.Roles.Any())
+            {
+                await _userManager.AddToRolesAsync(targetUser, dto.Roles);
+            }
+
+            // Log role changes
+            await _activityLogService.LogUserActivityAsync(
+                currentUser.Value,
+                "USER_ROLES_UPDATED",
+                $"Roles for user {targetUser.Name} ({targetUser.Email}) were updated to [{string.Join(", ", dto.Roles)}] by {currentUserEntity.Name}",
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+            );
+
+            return Ok(new { message = "Roles updated successfully" });
         }
     }
-    
-    
 }

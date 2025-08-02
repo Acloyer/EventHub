@@ -1,186 +1,156 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using EventHub.Data;
 using EventHub.Models;
-using Microsoft.Extensions.Logging;
+using EventHub.Models.DTOs;
 
 namespace EventHub.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
+    [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
     public class RoleController : ControllerBase
     {
         private readonly EventHubDbContext _db;
+        private readonly UserManager<User> _userManager;
+        private readonly RoleManager<Role> _roleManager;
         private readonly ILogger<RoleController> _logger;
 
-        public RoleController(EventHubDbContext db, ILogger<RoleController> logger)
+        private static readonly Dictionary<string, int> RoleHierarchy = new()
+        {
+            ["User"] = 0,
+            ["Organizer"] = 1,
+            ["Admin"] = 2,
+            ["SeniorAdmin"] = 3,
+            ["Owner"] = 4
+        };
+
+        public RoleController(
+            EventHubDbContext db,
+            UserManager<User> userManager,
+            RoleManager<Role> roleManager,
+            ILogger<RoleController> logger)
         {
             _db = db;
+            _userManager = userManager;
+            _roleManager = roleManager;
             _logger = logger;
         }
 
-        // ── GET api/Role/names ────────────────────────────────────────────────
-        // Returns only the list of role names. Admin and Organizer may call this.
-        [HttpGet("names")]
-        [Authorize(Roles = "Admin,Organizer,SeniorAdmin,Owner")]
-        public async Task<IActionResult> GetAllRoleNames()
-        {
-            var roleNames = await _db.Roles
-                                     .Select(r => r.Name)
-                                     .ToListAsync();
-            return Ok(roleNames);
-        }
-
-        // ── GET api/Role ──────────────────────────────────────────────────────
-        // Returns the full Role objects (with UserRoles included). Admin only.
         [HttpGet]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<ActionResult<IEnumerable<Role>>> GetRoles()
+        public async Task<IActionResult> GetRoles()
         {
-            var roles = await _db.Roles
-                                 .Include(r => r.UserRoles)
-                                 .ToListAsync();
+            var currentRole = await GetCurrentHighestRoleAsync();
+            if (currentRole == null)
+                return Forbid();
 
-            // We project into a fresh Role instance so that EF’s tracker warnings (null issues) are avoided.
-            var result = roles.Select(r => new Role
+            var allRoles = await _roleManager.Roles.ToListAsync();
+            var allowedRoles = allRoles.Where(r => RoleHierarchy.TryGetValue(r.Name, out var lvl)
+                && lvl <= RoleHierarchy[currentRole]).ToList();
+
+            var dto = new List<RoleDto>();
+            foreach (var role in allowedRoles)
             {
-                Id = r.Id,
-                Name = r.Name,
-                UserRoles = r.UserRoles ?? new List<UserRole>()
-            }).ToList();
+                var usersInRole = await _userManager.GetUsersInRoleAsync(role.Name);
+                dto.Add(new RoleDto { Id = role.Id, Name = role.Name, UserCount = usersInRole.Count });
+            }
 
-            return Ok(result);
+            return Ok(dto);
         }
 
-        // ── GET api/Role/user/{userId} ────────────────────────────────────────
-        // Returns the names of roles assigned to a specific user. Admin and Organizer may call this.
-        [HttpGet("user/{userId}")]
-        [Authorize(Roles = "Admin,Organizer,SeniorAdmin,Owner")]
+        private async Task<string?> GetCurrentHighestRoleAsync()
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null) return null;
+
+            var roles = await _userManager.GetRolesAsync(user);
+            return roles.Where(r => RoleHierarchy.ContainsKey(r))
+                        .OrderByDescending(r => RoleHierarchy[r])
+                        .FirstOrDefault();
+        }
+
+        private async Task<bool> CanManageUserAsync(int targetUserId)
+        {
+            var currentRole = await GetCurrentHighestRoleAsync();
+            if (currentRole == null) return false;
+
+            var targetUser = await _userManager.FindByIdAsync(targetUserId.ToString());
+            if (targetUser == null) return false;
+
+            var targetRoles = await _userManager.GetRolesAsync(targetUser);
+            var highestTarget = targetRoles.Where(r => RoleHierarchy.ContainsKey(r))
+            .OrderByDescending(r => RoleHierarchy[r])
+            .FirstOrDefault();
+
+            return highestTarget == null || RoleHierarchy[currentRole] > RoleHierarchy[highestTarget];
+        }
+
+        [HttpGet("user/{userId:int}")]
         public async Task<IActionResult> GetUserRoles(int userId)
         {
-            var roles = await _db.UserRoles
-                                 .Include(ur => ur.Role)
-                                 .Where(ur => ur.UserId == userId && ur.Role != null)
-                                 .Select(ur => ur.Role!.Name)
-                                 .ToListAsync();
+            // if (!await CanManageUserAsync(userId)) return Forbid();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound("User not found");
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var currentId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            if (userId == currentId)
+            {
+                var list = roles.ToList();
+                list.Insert(0, "You");
+                return Ok(list);
+            }
 
             return Ok(roles);
         }
 
-        public class RoleAssignDto
+        [HttpPost("user/{userId:int}/role/{roleName}")]
+        public async Task<IActionResult> AddRoleToUser(int userId, string roleName)
         {
-            public int UserId { get; set; }
-            public string Role { get; set; } = null!;
-        }
+            if (!await CanManageUserAsync(userId))
+                return Forbid();
+            if (!await _roleManager.RoleExistsAsync(roleName))
+                return NotFound("Role does not exist");
 
-        // ── POST api/Role/assign ──────────────────────────────────────────────
-        // Assigns a role (by roleId) to a user. Admin only.
-        [HttpPost("assign")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> AssignRole(int userId, int roleId)
-        {
-            var user = await _db.Users.FindAsync(userId);
+            // Only one Owner allowed
+            if (roleName.ToLower() == "owner")
+            {
+                var existingOwners = await _userManager.GetUsersInRoleAsync("Owner");
+                if (existingOwners.Count > 0)
+                    return BadRequest(new { message = "There can be only one Owner." });
+            }
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
                 return NotFound("User not found");
 
-            var role = await _db.Roles.FindAsync(roleId);
-            if (role == null)
-                return NotFound("Role not found");
+            var result = await _userManager.AddToRoleAsync(user, roleName);
+            if (!result.Succeeded)
+                return BadRequest(result.Errors);
 
-            // Check if that exact UserRole already exists
-            bool alreadyHas = await _db.UserRoles
-                                      .AnyAsync(ur => ur.UserId == userId && ur.RoleId == roleId);
-            if (alreadyHas)
-                return BadRequest("User already has that role");
-
-            var userRole = new UserRole
-            {
-                UserId = userId,
-                RoleId = roleId
-            };
-
-            _db.UserRoles.Add(userRole);
-            await _db.SaveChangesAsync();
-            return Ok();
+            return Ok(new { message = $"Role '{roleName}' added to user {userId}." });
         }
 
-        // ── POST api/Role/remove ──────────────────────────────────────────────
-        // Removes the named role from a user. Admin only.
-        [HttpPost("remove")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> RemoveRole([FromBody] RoleAssignDto dto)
+        [HttpDelete("user/{userId:int}/role/{roleName}")]
+        public async Task<IActionResult> RemoveRoleFromUser(int userId, string roleName)
         {
-            var ur = await _db.UserRoles
-                              .Include(x => x.Role)
-                              .SingleOrDefaultAsync(ur => ur.UserId == dto.UserId 
-                                                         && ur.Role != null 
-                                                         && ur.Role.Name == dto.Role);
+            // if (!await CanManageUserAsync(userId)) return Forbid();
 
-            if (ur == null)
-                return NotFound("Role assignment not found");
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound("User not found");
 
-            _db.UserRoles.Remove(ur);
-            await _db.SaveChangesAsync();
-            return Ok();
-        }
+            var result = await _userManager.RemoveFromRoleAsync(user, roleName);
+            if (!result.Succeeded) return BadRequest(result.Errors);
 
-        // ── GET api/Role/{id} ─────────────────────────────────────────────────
-        // Returns a single Role (with its UserRoles). Admin only.
-        [HttpGet("{id:int}")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<ActionResult<Role>> GetRole(int id)
-        {
-            var role = await _db.Roles
-                                .Include(r => r.UserRoles)
-                                .FirstOrDefaultAsync(r => r.Id == id);
-
-            if (role == null)
-                return NotFound(new { message = "Role not found" });
-
-            // Return a fresh object so that “UserRoles” is never null
-            return Ok(new Role
-            {
-                Id = role.Id,
-                Name = role.Name,
-                UserRoles = role.UserRoles ?? new List<UserRole>()
-            });
-        }
-
-        // ── POST api/Role ─────────────────────────────────────────────────────
-        // Creates a new role. Admin only.
-        [HttpPost]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<ActionResult<Role>> CreateRole(Role role)
-        {
-            if (await _db.Roles.AnyAsync(r => r.Name == role.Name))
-            {
-                return BadRequest(new { message = "Role already exists" });
-            }
-
-            // Initialize UserRoles since it’s required
-            role.UserRoles = role.UserRoles ?? new List<UserRole>();
-            _db.Roles.Add(role);
-            await _db.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetRole), new { id = role.Id }, role);
-        }
-
-        // ── DELETE api/Role/{id} ──────────────────────────────────────────────
-        // Deletes a role. Admin only.
-        [HttpDelete("{id:int}")]
-        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
-        public async Task<IActionResult> DeleteRole(int id)
-        {
-            var role = await _db.Roles.FindAsync(id);
-            if (role == null)
-            {
-                return NotFound(new { message = "Role not found" });
-            }
-
-            _db.Roles.Remove(role);
-            await _db.SaveChangesAsync();
-            return NoContent();
+            return Ok(new { message = $"Role '{roleName}' removed from user {userId}." });
         }
     }
 }

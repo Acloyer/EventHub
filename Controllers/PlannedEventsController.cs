@@ -1,10 +1,14 @@
-﻿using EventHub.Data;
-using EventHub.Models;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
+using System.Threading.Tasks;
+using EventHub.Data;
+using EventHub.Models;
+using EventHub.Models.DTOs;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot;
 
 namespace EventHub.Controllers
 {
@@ -13,72 +17,294 @@ namespace EventHub.Controllers
     [Authorize]
     public class PlannedEventsController : ControllerBase
     {
-        private readonly ApplicationDbContext _db;
-        public PlannedEventsController(ApplicationDbContext db) => _db = db;
+        private readonly EventHubDbContext _db;
+        private readonly ITelegramBotClient _bot;
+
+        public PlannedEventsController(EventHubDbContext db, ITelegramBotClient bot)
+        {
+            _db = db;
+            _bot = bot;
+        }
+
+        private bool TryGetUserId(out int userId)
+        {
+            var raw = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            return int.TryParse(raw, out userId);
+        }
 
         // GET: api/PlannedEvents
         [HttpGet]
         public async Task<IActionResult> GetPlanned()
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
-            var planned = await _db.PlannedEvents
+            var plannedEvents = await _db.PlannedEvents
                 .Where(p => p.UserId == userId)
-                .Include(p => p.Event)
-                .Select(p => p.Event)
+                .Include(p => p.Event).ThenInclude(e => e.Creator)
+                .Include(p => p.Event).ThenInclude(e => e.EventComments)
+                .Select(p => new EventDto(p.Event)
+                {
+                    IsPlanned = true,
+                    IsFavorite = p.Event.FavoriteEvents.Any(f => f.UserId == userId)
+                })
                 .ToListAsync();
 
-            return Ok(planned);
+
+            return Ok(plannedEvents);
         }
 
-        // POST: api/PlannedEvents/5
         [HttpPost("{eventId:int}")]
-        public async Task<IActionResult> AddToPlanned(int eventId)
+        public async Task<IActionResult> TogglePlanned(int eventId)
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
-            var @event = await _db.Events.FindAsync(eventId);
-            if (@event == null)
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
                 return NotFound("Event not found.");
 
-            var existingPlanned = await _db.PlannedEvents
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+                return Unauthorized();
+
+            var planned = await _db.PlannedEvents
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
 
-            if (existingPlanned != null)
+            bool isPlanned;
+
+            if (planned != null)
             {
-                _db.PlannedEvents.Remove(existingPlanned);
-                await _db.SaveChangesAsync();
-                return Ok(new { isPlanned = false });
+                _db.PlannedEvents.Remove(planned);
+                isPlanned = false;
+            }
+            else
+            {
+                // Check if user is in organizer's blacklist
+                var isBlacklisted = await _db.OrganizerBlacklists
+                    .AnyAsync(ob => ob.OrganizerId == ev.CreatorId && ob.BannedUserId == userId);
+
+                if (isBlacklisted)
+                {
+                    return Forbid("You are banned from attending events by this organizer.");
+                }
+
+                _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId, CreatedAt = DateTime.UtcNow });
+                isPlanned = true;
             }
 
-            _db.PlannedEvents.Add(new PlannedEvent
-            {
-                UserId = userId,
-                EventId = eventId
-            });
             await _db.SaveChangesAsync();
-            return Ok(new { isPlanned = true });
+
+            // 🔔 Telegram notification if enabled
+            if (user.TelegramId != null && user.IsTelegramVerified && user.NotifyBeforeEvent)
+            {
+                var message = isPlanned
+                    ? $"🗓 <b>You added</b> event <i>«{ev.Title}»</i> to planned!"
+                    : $"❌ <b>You removed</b> event <i>«{ev.Title}»</i> from planned.";
+
+                try
+                {
+                    await _bot.SendTextMessageAsync(
+                        chatId: user.TelegramId.Value,
+                        text: message,
+                        parseMode: ParseMode.Html
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Telegram error: {ex.Message}");
+                    // Don't block execution
+                }
+            }
+
+            return Ok(new { isPlanned });
         }
 
-        // DELETE: api/PlannedEvents/5
+
+
+        // DELETE: api/PlannedEvents/{eventId}
         [HttpDelete("{eventId:int}")]
         public async Task<IActionResult> RemoveFromPlanned(int eventId)
         {
-            var userId = int.Parse(
-                User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-             ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
 
             var plan = await _db.PlannedEvents
                 .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
 
-            if (plan == null) return NotFound();
+            if (plan == null)
+                return NotFound("Planned entry not found.");
+
             _db.PlannedEvents.Remove(plan);
             await _db.SaveChangesAsync();
-            return Ok();
+
+            return Ok(new { isPlanned = false });
+        }
+
+        // ===== Admin endpoints =====
+
+        // GET: api/PlannedEvents/admin/all
+        [HttpGet("admin/all")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetAllPlannedEvents()
+        {
+            var all = await _db.PlannedEvents
+                .Include(p => p.Event)
+                    .ThenInclude(e => e.Creator)
+                .ToListAsync();
+
+            var result = all.Select(p => new
+            {
+                p.UserId,
+                p.EventId,
+                // Event = new EventDto(p.Event)
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        // GET: api/PlannedEvents/user/{userId}
+        [HttpGet("user/{userId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetPlannedForUser(int userId)
+        {
+            var list = await _db.PlannedEvents
+                .Where(p => p.UserId == userId)
+                .Include(p => p.Event)
+                    .ThenInclude(e => e.Creator)
+                .Select(p => new EventDto(p.Event))
+                .ToListAsync();
+
+            return Ok(list);
+        }
+
+        // POST: api/PlannedEvents/user/{userId}/{eventId}
+        [HttpPost("user/{userId:int}/{eventId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> AddPlannedForUser(int userId, int eventId)
+        {
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
+                return NotFound("Event not found.");
+
+            var exists = await _db.PlannedEvents
+                .AnyAsync(p => p.UserId == userId && p.EventId == eventId);
+            if (!exists)
+            {
+                _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId });
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(new { isPlanned = true });
+        }
+
+        // DELETE: api/PlannedEvents/user/{userId}/{eventId}
+        [HttpDelete("user/{userId:int}/{eventId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> RemovePlannedForUser(int userId, int eventId)
+        {
+            var plan = await _db.PlannedEvents
+                .FirstOrDefaultAsync(p => p.UserId == userId && p.EventId == eventId);
+            if (plan == null)
+                return NotFound("Planned entry not found.");
+
+            _db.PlannedEvents.Remove(plan);
+            await _db.SaveChangesAsync();
+
+            return Ok(new { isPlanned = false });
+        }
+
+        [HttpGet("event/{eventId:int}/attendees")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner,Organizer")]
+        public async Task<IActionResult> GetEventAttendees(int eventId)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            // Проверяем, что событие существует
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
+                return NotFound("Event not found.");
+
+            // Проверяем права доступа: только создатель события или админы могут видеть участников
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+                return Unauthorized();
+
+            var userRoles = await _db.UserRoles
+                .Where(ur => ur.UserId == userId)
+                .Join(_db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isAdmin = userRoles.Any(r => r == "Admin" || r == "SeniorAdmin" || r == "Owner");
+            var isOrganizer = userRoles.Any(r => r == "Organizer");
+            var isEventCreator = ev.CreatorId == userId;
+
+            if (!isAdmin && !isEventCreator)
+                return Forbid("You don't have permission to view attendees for this event.");
+
+            var attendees = await _db.PlannedEvents
+                .Where(p => p.EventId == eventId)
+                .Include(p => p.User)
+                .Select(p => new
+                {
+                    UserId = p.User.Id,
+                    UserName = p.User.Name,
+                    UserEmail = p.User.Email,
+                    AddedAt = p.CreatedAt ?? DateTime.UtcNow // Если CreatedAt не установлен, используем текущее время
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                EventId = eventId,
+                EventTitle = ev.Title,
+                AttendeesCount = attendees.Count,
+                Attendees = attendees
+            });
+        }
+
+        [HttpDelete("event/{eventId:int}/attendee/{attendeeId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner,Organizer")]
+        public async Task<IActionResult> RemoveAttendeeFromEvent(int eventId, int attendeeId)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            // Проверяем, что событие существует
+            var ev = await _db.Events.FindAsync(eventId);
+            if (ev == null)
+                return NotFound("Event not found.");
+
+            // Проверяем права доступа: только создатель события или админы могут удалять участников
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+                return Unauthorized();
+
+            var userRoles = await _db.UserRoles
+                .Where(ur => ur.UserId == userId)
+                .Join(_db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Name)
+                .ToListAsync();
+
+            var isAdmin = userRoles.Any(r => r == "Admin" || r == "SeniorAdmin" || r == "Owner");
+            var isEventCreator = ev.CreatorId == userId;
+
+            if (!isAdmin && !isEventCreator)
+                return Forbid("You don't have permission to remove attendees from this event.");
+
+            // Проверяем, что участник существует
+            var plannedEvent = await _db.PlannedEvents
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.EventId == eventId && p.UserId == attendeeId);
+
+            if (plannedEvent == null)
+                return NotFound("Attendee not found for this event.");
+
+            // Удаляем участника из события
+            _db.PlannedEvents.Remove(plannedEvent);
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = $"User {plannedEvent.User.Name} removed from event successfully." });
         }
     }
 }
