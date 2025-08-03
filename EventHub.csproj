@@ -8,7 +8,18 @@
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+<<<<<<< HEAD
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
+=======
+<<<<<<< HEAD
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+=======
+<<<<<<< HEAD
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.0" />

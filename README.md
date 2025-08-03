@@ -1,6 +1,14 @@
 # EventHub Backend API
 
+<<<<<<< HEAD
 **Version 1.3**
+=======
+<<<<<<< HEAD
+**Version 1.2.1**
+=======
+**Version 1.2**
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 A comprehensive event management platform built with ASP.NET Core 8.0, featuring role-based access control, real-time notifications, Telegram integration, and advanced user management capabilities.
 
@@ -38,6 +46,7 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 
 ### 👥 User Management
 - **User registration** and profile management
+<<<<<<< HEAD
 - **Role assignment** and permission management with hierarchical validation
 - **User banning system** with duration-based restrictions
 - **User muting system** with rank-based restrictions
@@ -45,6 +54,14 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - **User impersonation** for administrative purposes
 - **Ownership transfer** with Telegram verification system
 - **Role hierarchy enforcement** (Owner > SeniorAdmin > Admin > Organizer > User)
+=======
+- **Role assignment** and permission management
+- **User banning system** with duration-based restrictions
+- **User muting system** for temporary restrictions
+- **Profile updates** and personal information management
+- **User impersonation** for administrative purposes
+- **Ownership transfer** between users
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 ### 💬 Social Features
 - **Event comments** with threaded replies
@@ -68,9 +85,12 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - **Administrative analytics** and reporting
 - **User behavior monitoring** and analysis
 - **System usage statistics**
+<<<<<<< HEAD
 - **Real-time activity monitoring** with filtering capabilities
 - **Detailed audit trail** for security and compliance
 - **Activity log pagination** and search functionality
+=======
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 ### 🤖 Telegram Integration
 - **Telegram bot** for external notifications
@@ -79,8 +99,11 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - **Database access confirmation** via Telegram codes
 - **Secure code generation** and verification
 - **Telegram ID linking** to user accounts
+<<<<<<< HEAD
 - **Ownership transfer verification** with 6-digit codes
 - **Enhanced security** for critical operations
+=======
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 ### 🛡️ Security Features
 - **CORS protection** with frontend-specific policies
@@ -114,10 +137,16 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - `RoleController` - Role management
 - `ActivityLogController` - Audit logging
 - `OrganizerBlacklistController` - Organizer-specific blacklists
+<<<<<<< HEAD
 - `OwnershipController` - Ownership transfer operations with verification
 - `BotController` - Telegram bot integration
 - `SeedController` - Database seeding operations
 - `ActivityLogController` - Comprehensive activity logging and monitoring
+=======
+- `OwnershipController` - Ownership transfer operations
+- `BotController` - Telegram bot integration
+- `SeedController` - Database seeding operations
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 ### Services
 - `JwtService` - JWT token generation and validation
@@ -136,10 +165,17 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - `UserBanEntry` - User banning records
 - `UserMuteEntry` - User muting records
 - `OrganizerBlacklist` - Organizer blacklist entities
+<<<<<<< HEAD
 - `ActivityLog` - Comprehensive audit log entries with metadata
 - `Notification` - Notification entities
 - `TelegramVerification` - Telegram verification records
 - `Role` - Role definitions with hierarchical structure
+=======
+- `ActivityLog` - Audit log entries
+- `Notification` - Notification entities
+- `TelegramVerification` - Telegram verification records
+- `Role` - Role definitions
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 ## 🔧 Configuration
 
@@ -234,6 +270,7 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - `PUT /Notifications/{id}/read` - Mark as read
 - `DELETE /Notifications/{id}` - Delete notification
 
+<<<<<<< HEAD
 ### Activity Logs
 - `GET /ActivityLogs` - Get activity logs with filtering
 - `GET /ActivityLogs/summary` - Get activity statistics
@@ -243,6 +280,8 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 - `POST /Ownership/request-transfer` - Request ownership transfer
 - `POST /Ownership/confirm-transfer` - Confirm transfer with verification code
 
+=======
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -255,6 +294,7 @@ A comprehensive event management platform built with ASP.NET Core 8.0, featuring
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+<<<<<<< HEAD
 ## 🆕 Version 1.3 Enhancements
 
 ### 🔄 Enhanced Ownership Transfer System
@@ -281,6 +321,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Search Functionality** - Advanced search capabilities
 - **Performance Optimization** - Improved response times and efficiency
 
+=======
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 ## 🆘 Support
 
 For support and questions, please refer to the project documentation or create an issue in the repository.

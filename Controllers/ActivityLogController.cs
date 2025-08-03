@@ -75,10 +75,25 @@ namespace EventHub.Controllers
                     {
                         log.Id,
                         log.UserId,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+                        UserName = log.User.Name,
+                        UserEmail = log.User.Email,
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                         log.Action,
                         log.EntityType,
                         log.EntityId,
                         log.Details,
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+                        log.IpAddress,
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                         log.UserAgent,
                         log.Timestamp
                     })
@@ -180,7 +195,15 @@ namespace EventHub.Controllers
                         log.EntityType,
                         log.EntityId,
                         log.Details,
+<<<<<<< HEAD
                         log.UserAgent,
+=======
+<<<<<<< HEAD
+                        log.UserAgent,
+=======
+                        log.IpAddress,
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                         log.Timestamp
                     })
                     .ToListAsync();

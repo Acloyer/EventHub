@@ -3,22 +3,59 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+<<<<<<< HEAD
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+=======
+<<<<<<< HEAD
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+=======
+<<<<<<< HEAD
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
 using Microsoft.AspNetCore.Authorization;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using EventHub.Services;
 using UserModel = EventHub.Models.User;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 namespace EventHub.Controllers
 {
     [ApiController]
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
     // [Route("api/comments/{eventId}")]
 
     [Route("api/comments")]
@@ -41,11 +78,20 @@ namespace EventHub.Controllers
             _notificationService = notificationService;
         }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         private string GetUserAgent()
         {
             return HttpContext.Request.Headers["User-Agent"].ToString() ?? "Unknown";
         }
 
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         // Controllers/CommentsController.cs
 
         // GET api/comments
@@ -163,6 +209,10 @@ namespace EventHub.Controllers
         [HttpPost("{eventId:int}"), Authorize]
         public async Task<IActionResult> Create(int eventId, [FromBody] CreateCommentDto dto)
         {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             // Check if user is muted
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var muteEntry = await _db.UserMuteEntries.FindAsync(userId);
@@ -188,11 +238,84 @@ namespace EventHub.Controllers
             // 1) Save new comment
             var comment = new EventComment
             {
+<<<<<<< HEAD
+=======
+=======
+            // 1) Save new comment
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var comment = new EventComment
+            {
+=======
+    [Route("api/comments/{eventId}")]
+    public class CommentsController : ControllerBase
+    {
+        private readonly EventHubDbContext _db;
+        public CommentsController(EventHubDbContext db) => _db = db;
+
+        // GET /api/events/{eventId}/comments
+        [HttpGet, AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<CommentDto>>> GetAll(int eventId)
+        {
+            var comments = await _db.EventComments
+                .Where(c => c.EventId == eventId)
+                .OrderBy(c => c.PostDate)
+                .Select(c => new CommentDto {
+                    Id       = c.Id,
+                    UserId   = c.UserId,
+                    Comment  = c.Comment,
+                    PostDate = c.PostDate,
+                    IsEdited = c.IsEdited,
+                    EditDate = c.EditDate,
+                    IsPinned = c.IsPinned
+                })
+                .ToListAsync();
+
+            return Ok(comments);
+        }
+
+        // GET /api/comments/{userId}
+        [HttpGet("~/api/comments/{userId}"), Authorize]
+        public async Task<ActionResult<IEnumerable<CommentDto>>> GetAllByUserId(int userId)
+        {
+            var comments = await _db.EventComments
+                .Where(c => c.UserId == userId)
+                .OrderBy(c => c.PostDate)
+                .Select(c => new CommentDto {
+                    Id       = c.Id,
+                    UserId   = c.UserId,
+                    Comment  = c.Comment,
+                    PostDate = c.PostDate,
+                    IsEdited = c.IsEdited,
+                    EditDate = c.EditDate,
+                    IsPinned = c.IsPinned
+                })
+                .ToListAsync();
+
+            return Ok(comments);
+        }
+
+        // POST /api/{eventId}/comments
+        [HttpPost, Authorize]
+        public async Task<IActionResult> Post(int eventId, [FromBody] CreateCommentDto dto)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var comment = new EventComment {
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                 EventId  = eventId,
                 UserId   = userId,
                 Comment  = dto.Comment,
                 PostDate = DateTime.UtcNow
             };
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             _db.EventComments.Add(comment);
             await _db.SaveChangesAsync();
 
@@ -202,7 +325,16 @@ namespace EventHub.Controllers
                 "COMMENT_CREATED",
                 comment.Id,
                 $"Created comment on event '{comment.Event?.Title ?? "Unknown"}'",
+<<<<<<< HEAD
                 GetUserAgent()
+=======
+<<<<<<< HEAD
+                GetUserAgent()
+=======
+                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
+                HttpContext.Request.Headers["User-Agent"].ToString()
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             );
 
             // Create notification for event creator (if not the same user)
@@ -253,6 +385,10 @@ namespace EventHub.Controllers
         public async Task<IActionResult> Update(int commentId, [FromBody] UpdateCommentDto dto)
         {
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             
             // Check if user is muted
             var muteEntry = await _db.UserMuteEntries.FindAsync(userId);
@@ -275,6 +411,11 @@ namespace EventHub.Controllers
                 return Forbid("You are currently muted and cannot update comments.");
             }
             
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             var comment = await _db.EventComments.Include(x => x.Event).FirstOrDefaultAsync(x => x.Id == commentId);
             if (comment == null) return NotFound();
             
@@ -346,6 +487,10 @@ namespace EventHub.Controllers
                 }
             }
             
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             // Store old comment for logging
             var oldComment = comment.Comment;
             
@@ -362,12 +507,64 @@ namespace EventHub.Controllers
             return Ok();
         }
 
+<<<<<<< HEAD
+=======
+=======
+            comment.Comment = dto.Comment;
+            comment.IsEdited = true;
+            comment.EditDate = DateTime.UtcNow;
+=======
+
+            _db.EventComments.Add(comment);
+            await _db.SaveChangesAsync();
+
+            var result = new CommentDto {
+                Id       = comment.Id,
+                UserId   = comment.UserId,
+                Comment  = comment.Comment,
+                PostDate = comment.PostDate,
+                IsEdited = false,
+                IsPinned = false
+            };
+
+            return CreatedAtAction(nameof(GetAll), new { eventId }, result);
+        }
+
+        // PUT /api/comments/{commentId}
+        [HttpPut("~/api/comments/{commentId}"), Authorize]
+        public async Task<IActionResult> Update(int commentId, [FromBody] UpdateCommentDto dto)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var comment = await _db.EventComments.FindAsync(commentId);
+
+            // if (comment == null || comment.EventId != eventId)
+                // return NotFound();
+
+            if (comment.UserId != userId)
+                return Forbid();
+
+            comment.Comment  = dto.Comment;
+            comment.IsEdited = true;
+            comment.EditDate = DateTime.UtcNow;
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         // 2.5 Delete own
         // DELETE /api/comments/{commentId}
         [HttpDelete("{commentId}"), Authorize]
         public async Task<IActionResult> DeleteOwn(int commentId)
         {
             var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             
             // Check if user is muted
             var muteEntry = await _db.UserMuteEntries.FindAsync(userId);
@@ -390,6 +587,11 @@ namespace EventHub.Controllers
                 return Forbid("You are currently muted and cannot delete comments.");
             }
             
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             var comment = await _db.EventComments.Include(x => x.Event).FirstOrDefaultAsync(x => x.Id == commentId);
             if (comment == null) return NotFound();
             
@@ -453,6 +655,10 @@ namespace EventHub.Controllers
                 }
             }
             
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             _db.EventComments.Remove(comment);
             await _db.SaveChangesAsync();
             
@@ -464,6 +670,37 @@ namespace EventHub.Controllers
             return Ok();
         }
 
+<<<<<<< HEAD
+=======
+=======
+=======
+        // DELETE /api/{eventId}/comments/{commentId}
+        [HttpDelete("~/api/comments/{commentId}"), Authorize]
+        public async Task<IActionResult> DeleteOwn(int commentId)
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var comment = await _db.EventComments.FindAsync(commentId);
+
+            // if (comment == null || comment.EventId != eventId)
+                // return NotFound();
+
+            if (comment == null){
+                return NotFound();
+            }
+
+            if (comment.UserId != userId)
+                return Forbid();
+
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+            _db.EventComments.Remove(comment);
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         // 2.6 Delete by any admin
         // DELETE /api/comments/admin/{commentId}
         [HttpDelete("admin/{commentId}"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
@@ -534,6 +771,10 @@ namespace EventHub.Controllers
                 return Forbid();
             }
             
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             var adminUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             _db.EventComments.Remove(comment);
             await _db.SaveChangesAsync();
@@ -552,6 +793,34 @@ namespace EventHub.Controllers
             var comment = await _db.EventComments
                 .Include(c => c.Event)
                 .FirstOrDefaultAsync(c => c.Id == commentId);
+<<<<<<< HEAD
+=======
+=======
+=======
+        // DELETE /api/events/{eventId}/comments/{commentId}/by-user/{userId}
+        // — админы могут удалять чужие
+        // ~/api/comments/admin/{commentId}
+        [HttpDelete("~/api/comments/admin/{commentId}"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> DeleteAny(int commentId)
+        {
+            var comment = await _db.EventComments.FindAsync(commentId);
+            // if (comment == null || comment.EventId != eventId || comment.UserId != userId)
+            if (comment == null)
+                return NotFound();
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+            _db.EventComments.Remove(comment);
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+<<<<<<< HEAD
+        [HttpPatch("pin/{commentId}"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> Pin(int commentId, [FromQuery] bool pinned)
+        {
+            var comment = await _db.EventComments.FindAsync(commentId);
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             if (comment == null) return NotFound();
 
             // Get current user and their roles
@@ -630,6 +899,26 @@ namespace EventHub.Controllers
             comment.PinnedAt = pinned ? DateTime.UtcNow : (DateTime?)null;
             await _db.SaveChangesAsync();
             return Ok(new { comment.Id, comment.IsPinned, comment.PinnedAt });
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+        // (Опционально) PATCH /api/{eventId}/comments/{commentId}/pin
+        [HttpPatch("~/api/comments/pin/{commentId}"), Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> Pin(int commentId, [FromQuery] bool pinned)
+        {
+            var comment = await _db.EventComments.FindAsync(commentId);
+            // if (comment == null || comment.EventId != eventId)
+            if (comment == null)
+                return NotFound();
+
+            comment.IsPinned = pinned;
+            await _db.SaveChangesAsync();
+            return Ok();
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
     }
 }

@@ -1,3 +1,10 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 // using System.ComponentModel.DataAnnotations;
 
 // namespace EventHub.Models.DTOs
@@ -30,11 +37,27 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using EventHub.Models;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+using System.ComponentModel.DataAnnotations;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 namespace EventHub.Models.DTOs
 {
     public class CommentDto
     {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         public CommentDto() {}
 
         // Конструктор, если кому удобно
@@ -73,6 +96,24 @@ namespace EventHub.Models.DTOs
         public DateTime? PinnedAt   { get; set; }
     }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+        public int      Id       { get; set; }
+        public int      UserId   { get; set; }
+        [Required, MaxLength(200)]
+        public string Comment { get; set; } = null!;
+        public DateTime PostDate { get; set; }
+        public bool     IsEdited { get; set; }
+        public DateTime? EditDate{ get; set; }
+        public bool     IsPinned { get; set; }
+    }
+    
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
     public class CreateCommentDto
     {
         [Required, MaxLength(200)]
@@ -84,4 +125,16 @@ namespace EventHub.Models.DTOs
         [Required, MaxLength(200)]
         public string Comment { get; set; } = null!;
     }
+<<<<<<< HEAD
 }
+=======
+<<<<<<< HEAD
+}
+=======
+<<<<<<< HEAD
+}
+=======
+}
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9

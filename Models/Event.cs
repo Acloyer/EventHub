@@ -26,6 +26,17 @@ namespace EventHub.Models
 
         public ICollection<PostReaction> PostReactions { get; set; } = new List<PostReaction>();
         public ICollection<EventComment> EventComments { get; set; } = new List<EventComment>();
+<<<<<<< HEAD
         
+=======
+<<<<<<< HEAD
+        
+=======
+<<<<<<< HEAD
+        
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
     }
 }

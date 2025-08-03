@@ -7,8 +7,21 @@ using System.Threading.Tasks;
 using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
+<<<<<<< HEAD
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot;
+=======
+<<<<<<< HEAD
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot;
+=======
+<<<<<<< HEAD
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot;
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 namespace EventHub.Controllers
 {
@@ -18,12 +31,31 @@ namespace EventHub.Controllers
     public class PlannedEventsController : ControllerBase
     {
         private readonly EventHubDbContext _db;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         private readonly ITelegramBotClient _bot;
 
         public PlannedEventsController(EventHubDbContext db, ITelegramBotClient bot)
         {
             _db = db;
             _bot = bot;
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+
+        public PlannedEventsController(EventHubDbContext db)
+        {
+            _db = db;
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
 
         private bool TryGetUserId(out int userId)
@@ -54,6 +86,16 @@ namespace EventHub.Controllers
             return Ok(plannedEvents);
         }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+        // POST: api/PlannedEvents/{eventId}
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         [HttpPost("{eventId:int}")]
         public async Task<IActionResult> TogglePlanned(int eventId)
         {
@@ -64,6 +106,13 @@ namespace EventHub.Controllers
             if (ev == null)
                 return NotFound("Event not found.");
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null)
                 return Unauthorized();
@@ -118,10 +167,38 @@ namespace EventHub.Controllers
             }
 
             return Ok(new { isPlanned });
+<<<<<<< HEAD
         }
 
 
 
+=======
+<<<<<<< HEAD
+        }
+
+
+
+=======
+        }
+
+
+
+=======
+            var exists = await _db.PlannedEvents
+                .AnyAsync(p => p.UserId == userId && p.EventId == eventId);
+
+            if (!exists)
+            {
+                _db.PlannedEvents.Add(new PlannedEvent { UserId = userId, EventId = eventId });
+                await _db.SaveChangesAsync();
+            }
+
+            return Ok(new { isPlanned = true });
+        }
+
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         // DELETE: api/PlannedEvents/{eventId}
         [HttpDelete("{eventId:int}")]
         public async Task<IActionResult> RemoveFromPlanned(int eventId)
@@ -212,6 +289,13 @@ namespace EventHub.Controllers
             await _db.SaveChangesAsync();
 
             return Ok(new { isPlanned = false });
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
 
         [HttpGet("event/{eventId:int}/attendees")]
@@ -305,6 +389,14 @@ namespace EventHub.Controllers
             await _db.SaveChangesAsync();
 
             return Ok(new { message = $"User {plannedEvent.User.Name} removed from event successfully." });
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
+>>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
+>>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
     }
 }
