@@ -13,15 +13,7 @@ namespace EventHub.Services
             _context = context;
         }
 
-<<<<<<< HEAD
         public async Task LogActivityAsync(int userId, string action, string entityType, int? entityId, string details, string userAgent)
-=======
-<<<<<<< HEAD
-        public async Task LogActivityAsync(int userId, string action, string entityType, int? entityId, string details, string userAgent)
-=======
-        public async Task LogActivityAsync(int userId, string action, string entityType, int? entityId, string details, string ipAddress, string userAgent)
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         {
             var log = new ActivityLog
             {
@@ -30,13 +22,6 @@ namespace EventHub.Services
                 EntityType = entityType,
                 EntityId = entityId,
                 Details = details,
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-                IpAddress = ipAddress,
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                 UserAgent = userAgent,
                 Timestamp = DateTime.UtcNow
             };
@@ -45,10 +30,6 @@ namespace EventHub.Services
             await _context.SaveChangesAsync();
         }
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         public async Task LogUserActivityAsync(int userId, string action, string details, string userAgent)
         {
             await LogActivityAsync(userId, action, "User", userId, details, userAgent);
@@ -62,24 +43,6 @@ namespace EventHub.Services
         public async Task LogCommentActivityAsync(int userId, string action, int commentId, string details, string userAgent)
         {
             await LogActivityAsync(userId, action, "Comment", commentId, details, userAgent);
-<<<<<<< HEAD
-=======
-=======
-        public async Task LogUserActivityAsync(int userId, string action, string details, string ipAddress, string userAgent)
-        {
-            await LogActivityAsync(userId, action, "User", userId, details, ipAddress, userAgent);
-        }
-
-        public async Task LogEventActivityAsync(int userId, string action, int eventId, string details, string ipAddress, string userAgent)
-        {
-            await LogActivityAsync(userId, action, "Event", eventId, details, ipAddress, userAgent);
-        }
-
-        public async Task LogCommentActivityAsync(int userId, string action, int commentId, string details, string ipAddress, string userAgent)
-        {
-            await LogActivityAsync(userId, action, "Comment", commentId, details, ipAddress, userAgent);
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
     }
 } 

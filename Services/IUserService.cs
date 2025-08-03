@@ -1,8 +1,5 @@
 using EventHub.Models.DTOs;
-<<<<<<< HEAD
 using EventHub.Models;
-=======
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
 namespace EventHub.Services
 {

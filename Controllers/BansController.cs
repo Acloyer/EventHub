@@ -99,13 +99,6 @@ namespace EventHub.Controllers
                 currentUserId,
                 dto.IsBanned ? "USER_BANNED" : "USER_UNBANNED",
                 $"User {targetUser.Name} ({targetUser.Email}) was {(dto.IsBanned ? "banned" : "unbanned")} by {currentUser.Name}",
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
             
@@ -172,13 +165,6 @@ namespace EventHub.Controllers
                 currentUserId,
                 "USER_BANNED_TEMPORARY",
                 $"User {targetUser.Name} ({targetUser.Email}) was banned for {dto.Minutes} minutes by {currentUser.Name}",
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-                HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown",
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                 HttpContext.Request.Headers["User-Agent"].ToString()
             );
             

@@ -16,13 +16,6 @@ namespace EventHub.Data
         // New features 
         public DbSet<EventComment>  EventComments   { get; set; }
         public DbSet<UserMuteEntry> UserMuteEntries { get; set; }
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         public DbSet<UserBanEntry>  UserBanEntries  { get; set; }
         public DbSet<Notification>  Notifications   { get; set; }
         // PostReactions
@@ -31,17 +24,6 @@ namespace EventHub.Data
         public DbSet<ActivityLog> ActivityLogs { get; set; }
         // Organizer Blacklist
         public DbSet<OrganizerBlacklist> OrganizerBlacklists { get; set; }
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-=======
-        public DbSet<Notification>  Notifications   { get; set; }
-        // PostReactions
-        public DbSet<PostReaction>  PostReactions   { get; set; }
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
 
         public EventHubDbContext(DbContextOptions<EventHubDbContext> options)
             : base(options)
@@ -50,16 +32,6 @@ namespace EventHub.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                     
             // ==== TelegramVerification ====
             modelBuilder.Entity<TelegramVerification>(entity =>
@@ -74,7 +46,6 @@ namespace EventHub.Data
 
             // ==== UserMuteEntry (one-to-one с User) ====
             modelBuilder.Entity<UserMuteEntry>(entity =>
-<<<<<<< HEAD
             {
                 entity.HasKey(m => m.UserId);
                 entity.HasOne(m => m.User)
@@ -153,276 +124,12 @@ namespace EventHub.Data
 
             // ==== Существующие сущности ====
 
-=======
-<<<<<<< HEAD
-            {
-                entity.HasKey(m => m.UserId);
-                entity.HasOne(m => m.User)
-                    .WithOne()                  // у User не заводим ICollection<…>
-                    .HasForeignKey<UserMuteEntry>(m => m.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== UserBanEntry (one-to-one с User) ====
-            modelBuilder.Entity<UserBanEntry>(entity =>
-            {
-                entity.HasKey(b => b.UserId);
-                entity.HasOne(b => b.User)
-                    .WithOne()                  // у User не заводим ICollection<…>
-                    .HasForeignKey<UserBanEntry>(b => b.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== Notifications ====
-            modelBuilder.Entity<Notification>(entity =>
-            {
-                entity.HasOne(n => n.User)
-                    .WithMany()                // если в User нет ICollection<Notification>, иначе WithMany(u => u.Notifications)
-                    .HasForeignKey(n => n.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== EventComment ====
-            modelBuilder.Entity<EventComment>(entity =>
-            {
-                entity.HasKey(c => c.Id);
-                entity.HasOne(c => c.Event)
-                    .WithMany(e => e.EventComments)
-                    .HasForeignKey(c => c.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(c => c.User)
-                    .WithMany(u => u.EventComments)
-                    .HasForeignKey(c => c.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.Property(c => c.Comment)
-                    .HasMaxLength(200)
-                    .IsRequired();
-            });
-
-
-            modelBuilder.Entity<PostReaction>(entity =>
-            {
-                // 1) сообщаем, что свойство EventId хранится в столбце "PostId"
-                entity.Property(r => r.EventId)
-                    .HasColumnName("PostId");
-
-                // 2) PK + уникальный индекс (одна реакция на одного юзера)
-                entity.HasKey(r => r.Id);
-                entity.HasIndex(r => new { r.EventId, r.UserId })
-                    .IsUnique();
-
-                // 3) FK на Events (PostId → Events.Id)
-                entity.HasOne(r => r.Event)
-                    .WithMany(e => e.PostReactions)
-                    .HasForeignKey(r => r.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 4) FK на AspNetUsers
-                entity.HasOne(r => r.User)
-                    .WithMany(u => u.PostReactions)
-                    .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 5) ограничения по Emoji
-                entity.Property(r => r.Emoji)
-                    .IsRequired()
-                    .HasMaxLength(10);
-            });
-
-            // ==== Существующие сущности ====
-
-=======
-<<<<<<< HEAD
-            {
-                entity.HasKey(m => m.UserId);
-                entity.HasOne(m => m.User)
-                    .WithOne()                  // у User не заводим ICollection<…>
-                    .HasForeignKey<UserMuteEntry>(m => m.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== UserBanEntry (one-to-one с User) ====
-            modelBuilder.Entity<UserBanEntry>(entity =>
-            {
-                entity.HasKey(b => b.UserId);
-                entity.HasOne(b => b.User)
-                    .WithOne()                  // у User не заводим ICollection<…>
-                    .HasForeignKey<UserBanEntry>(b => b.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== Notifications ====
-            modelBuilder.Entity<Notification>(entity =>
-            {
-                entity.HasOne(n => n.User)
-                    .WithMany()                // если в User нет ICollection<Notification>, иначе WithMany(u => u.Notifications)
-                    .HasForeignKey(n => n.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== EventComment ====
-            modelBuilder.Entity<EventComment>(entity =>
-            {
-                entity.HasKey(c => c.Id);
-                entity.HasOne(c => c.Event)
-                    .WithMany(e => e.EventComments)
-                    .HasForeignKey(c => c.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(c => c.User)
-                    .WithMany(u => u.EventComments)
-                    .HasForeignKey(c => c.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.Property(c => c.Comment)
-                    .HasMaxLength(200)
-                    .IsRequired();
-            });
-
-
-            modelBuilder.Entity<PostReaction>(entity =>
-            {
-                // 1) сообщаем, что свойство EventId хранится в столбце "PostId"
-                entity.Property(r => r.EventId)
-                    .HasColumnName("PostId");
-
-                // 2) PK + уникальный индекс (одна реакция на одного юзера)
-                entity.HasKey(r => r.Id);
-                entity.HasIndex(r => new { r.EventId, r.UserId })
-                    .IsUnique();
-
-                // 3) FK на Events (PostId → Events.Id)
-                entity.HasOne(r => r.Event)
-                    .WithMany(e => e.PostReactions)
-                    .HasForeignKey(r => r.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 4) FK на AspNetUsers
-                entity.HasOne(r => r.User)
-                    .WithMany(u => u.PostReactions)
-                    .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 5) ограничения по Emoji
-                entity.Property(r => r.Emoji)
-                    .IsRequired()
-                    .HasMaxLength(10);
-            });
-
-            // ==== Существующие сущности ====
-
-=======
-            {
-                entity.HasKey(m => m.UserId);
-                entity.HasOne(m => m.User)
-                    .WithOne()                  // у User не заводим ICollection<…>
-                    .HasForeignKey<UserMuteEntry>(m => m.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== Notifications ====
-            modelBuilder.Entity<Notification>(entity =>
-            {
-                entity.HasOne(n => n.User)
-                    .WithMany()                // если в User нет ICollection<Notification>, иначе WithMany(u => u.Notifications)
-                    .HasForeignKey(n => n.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // ==== EventComment ====
-            modelBuilder.Entity<EventComment>(entity =>
-            {
-                entity.HasKey(c => c.Id);
-                entity.HasOne(c => c.Event)
-                    .WithMany(e => e.EventComments)
-                    .HasForeignKey(c => c.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(c => c.User)
-                    .WithMany(u => u.EventComments)
-                    .HasForeignKey(c => c.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.Property(c => c.Comment)
-                    .HasMaxLength(200)
-                    .IsRequired();
-            });
-
-
-            modelBuilder.Entity<PostReaction>(entity =>
-            {
-                // 1) сообщаем, что свойство EventId хранится в столбце "PostId"
-                entity.Property(r => r.EventId)
-                    .HasColumnName("PostId");
-
-                // 2) PK + уникальный индекс (одна реакция на одного юзера)
-                entity.HasKey(r => r.Id);
-                entity.HasIndex(r => new { r.EventId, r.UserId })
-                    .IsUnique();
-
-                // 3) FK на Events (PostId → Events.Id)
-                entity.HasOne(r => r.Event)
-                    .WithMany(e => e.PostReactions)
-                    .HasForeignKey(r => r.EventId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 4) FK на AspNetUsers
-                entity.HasOne(r => r.User)
-                    .WithMany(u => u.PostReactions)
-                    .HasForeignKey(r => r.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                // 5) ограничения по Emoji
-                entity.Property(r => r.Emoji)
-                    .IsRequired()
-                    .HasMaxLength(10);
-            });
-
-            // ==== Существующие сущности ====
-
-=======
-
-            modelBuilder.Entity<TelegramVerification>()
-                .HasOne(tv => tv.User)
-                .WithMany()
-                .HasForeignKey(tv => tv.UserId);
-
-            // Вызов базового
-            base.OnModelCreating(modelBuilder);
-
-            // Переименование таблицы пользователя на AspNetUsers
-            modelBuilder.Entity<User>()
-                .ToTable("AspNetUsers");
-
-            // Конфигурация Role (IdentityRole настроен в IdentityDbContext)
-            modelBuilder.Entity<Role>(entity =>
-            {
-                entity.ToTable("AspNetRoles");
-            });
-
-            // Конфигурация Event
->>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             modelBuilder.Entity<Event>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Title).IsRequired();
                 entity.Property(e => e.Description).IsRequired();
                 entity.HasOne(e => e.Creator)
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                     .WithMany(u => u.CreatedEvents)
                     .HasForeignKey(e => e.CreatorId)
                     .OnDelete(DeleteBehavior.Cascade);
@@ -450,13 +157,6 @@ namespace EventHub.Data
                     .HasForeignKey(p => p.EventId);
             });
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             // ==== ActivityLog ====
             modelBuilder.Entity<ActivityLog>(entity =>
             {
@@ -477,15 +177,6 @@ namespace EventHub.Data
                 entity.Property(log => log.Details)
                     .HasMaxLength(1000);
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-                entity.Property(log => log.IpAddress)
-                    .HasMaxLength(45); // IPv6 support
-
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
                 entity.Property(log => log.UserAgent)
                     .HasMaxLength(500);
 
@@ -516,78 +207,10 @@ namespace EventHub.Data
                     .HasMaxLength(500);
             });
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-=======
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             modelBuilder.Entity<User>()
                         .ToTable("AspNetUsers");
             modelBuilder.Entity<Role>()
                         .ToTable("AspNetRoles");
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-=======
-                      .WithMany(u => u.CreatedEvents)
-                      .HasForeignKey(e => e.CreatorId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
-
-            // Конфигурация PostReaction
-            modelBuilder.Entity<PostReaction>()
-                .HasKey(pr => pr.Id);
-
-            // Конфигурация FavoriteEvent
-            modelBuilder.Entity<FavoriteEvent>(entity =>
-            {
-                entity.HasKey(e => new { e.UserId, e.EventId });
-                entity.HasOne(f => f.User)
-                      .WithMany(u => u.FavoriteEvents)
-                      .HasForeignKey(f => f.UserId);
-                entity.HasOne(f => f.Event)
-                      .WithMany(e => e.FavoriteEvents)
-                      .HasForeignKey(f => f.EventId);
-            });
-
-            // Конфигурация PlannedEvent
-            modelBuilder.Entity<PlannedEvent>(entity =>
-            {
-                entity.HasKey(e => new { e.UserId, e.EventId });
-                entity.HasOne(p => p.User)
-                      .WithMany(u => u.PlannedEvents)
-                      .HasForeignKey(p => p.UserId);
-                entity.HasOne(p => p.Event)
-                      .WithMany(e => e.PlannedEvents)
-                      .HasForeignKey(p => p.EventId);
-            });
-
-            // Конфигурация TelegramVerification
-            modelBuilder.Entity<TelegramVerification>()
-                .HasKey(tv => tv.Id);
-
-            modelBuilder.Entity<TelegramVerification>(entity =>
-            {
-                entity.ToTable("TelegramVerifications");
-                entity.HasKey(tv => tv.Id);
-
-                entity
-                .HasOne(tv => tv.User)
-                .WithMany(u => u.TelegramVerifications)
-                .HasForeignKey(tv => tv.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-            });
-
->>>>>>> 573f3e0705c1e3252b4cddd7cfc9446f4bee2932
->>>>>>> eb9d22584f7060235eadd9b35925603cfec8fc17
->>>>>>> bd47b2d28e579dbce8337936872728fa34fdfe4c
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
     }
 }

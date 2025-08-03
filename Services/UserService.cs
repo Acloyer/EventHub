@@ -40,12 +40,8 @@ namespace EventHub.Services
             var user = new User {
                 UserName = model.Email,
                 Email    = model.Email,
-<<<<<<< HEAD
                 Name     = model.Name,
                 IsTelegramVerified = false // Убеждаемся, что новые пользователи не верифицированы
-=======
-                Name     = model.Name
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             };
             var create = await _userManager.CreateAsync(user, model.Password);
             if (!create.Succeeded)
@@ -75,12 +71,9 @@ namespace EventHub.Services
             if (user.IsBanned)
                 throw new InvalidOperationException("User is banned");
 
-<<<<<<< HEAD
             // Проверка и сброс Telegram верификации если необходимо
             await ValidateAndResetTelegramVerification(user);
 
-=======
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtService.GenerateToken(user, roles);
 
@@ -103,7 +96,6 @@ namespace EventHub.Services
             if (user == null) return false;
             var res = await _userManager.DeleteAsync(user);
             return res.Succeeded;
-<<<<<<< HEAD
         }
 
         /// <summary>
@@ -117,8 +109,6 @@ namespace EventHub.Services
                 await _userManager.UpdateAsync(user);
                 _logger.LogInformation($"Reset Telegram verification for user {user.Email} due to missing TelegramId");
             }
-=======
->>>>>>> 3a88c209cf9953d8682fb13bab450d4d50f74bc9
         }
 
         public async Task<IEnumerable<UserDto>> GetAllUsersAsync()
