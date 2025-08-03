@@ -1,223 +1,206 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Security.Cryptography;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using Telegram.Bot;
-using Microsoft.OpenApi.Models;
+﻿using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Security.Claims;
 using EventHub.Data;
+using EventHub.Models;
 using EventHub.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Telegram.Bot;
+using DotNetEnv;
+
+// Load environment variables from .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
+var config = builder.Configuration;
 
-// Add CORS policy
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
+// 1) JwtOptions configuration from appsettings.json
+builder.Services.Configure<JwtOptions>(config.GetSection("Jwt"));
+
+// 2) Add JWT authentication
+builder.Services
+    .AddAuthentication(options =>
     {
-        policy.WithOrigins("http://localhost:3000")
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme    = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(opts =>
+    {
+        var jwt = config.GetSection("Jwt").Get<JwtOptions>()!;
+        opts.RequireHttpsMetadata   = false;
+        opts.SaveToken              = true;
+        opts.MapInboundClaims       = false;
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer              = jwt.Issuer,
+            ValidAudience            = jwt.Audience,
+            IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key))
+        };
     });
-});
 
-// Configure Telegram Bot
-var botToken = builder.Configuration["TelegramBot:Token"];
-builder.Services.AddSingleton<ITelegramBotClient>(new TelegramBotClient(
-    botToken ?? throw new InvalidOperationException("Telegram bot token not configured")
+// 3) EF Core + Identity
+builder.Services.AddDbContext<EventHubDbContext>(o =>
+    o.UseNpgsql(config.GetConnectionString("DefaultConnection")));
+builder.Services.AddIdentityCore<User>(opts =>
+    {
+        opts.Password.RequiredLength = 6;
+        opts.Password.RequireDigit   = true;
+        // other password settings
+    })
+    .AddRoles<Role>()
+    .AddEntityFrameworkStores<EventHubDbContext>()
+    .AddDefaultTokenProviders();
+
+// 4) Telegram client
+builder.Services.AddSingleton<ITelegramBotClient>(_ =>
+    new TelegramBotClient(Environment.GetEnvironmentVariable("TELEGRAM_BOT_TOKEN")!));
+
+// 5) Your services
+builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddHostedService<NotificationHostedService>();
+
+// 6) CORS: allow only frontend and cookies
+builder.Services.AddCors(o => o.AddPolicy("AllowFrontend", p =>
+    p
+      .WithOrigins("http://localhost:3000") // React address
+      .AllowCredentials()                    // allow cookies/credentials
+      .AllowAnyMethod()
+      .AllowAnyHeader()
 ));
 
-// Add services to the container.
+// 7) Controllers + System.Text.Json (PascalCase + camelCase-enum)
 builder.Services.AddControllers()
-    .AddJsonOptions(options =>
+    .AddJsonOptions(opts =>
     {
-        options.JsonSerializerOptions.ReferenceHandler =
-            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.DefaultIgnoreCondition =
-            System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        opts.JsonSerializerOptions.PropertyNamingPolicy = null;
+        opts.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
     });
-builder.Services.AddEndpointsApiExplorer();
 
-// Configure Swagger with JWT authentication
+// 8) Swagger
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.CustomSchemaIds(type => type.FullName);
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "EventHub API", Version = "v1" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer {token}'",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Name        = "Authorization",
+        In          = ParameterLocation.Header,
+        Type        = SecuritySchemeType.Http,
+        Scheme      = "bearer",
+        Description = "JWT"
     });
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
+            new OpenApiSecurityScheme {
+                Reference = new OpenApiReference {
                     Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id   = "Bearer"
                 }
             },
-            Array.Empty<string>()
+            new string[0]
         }
     });
+    c.CustomSchemaIds(t => t.FullName);
 });
-
-// Add DbContext for application data
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-           .EnableSensitiveDataLogging() // Debug detailed SQL logs
-);
-
-// Optional separate DbContext for controllers
-builder.Services.AddDbContext<EventHubDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-);
-
-// Configure JWT Authentication
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var key = Encoding.ASCII.GetBytes(
-    jwtSection["Secret"] ?? throw new InvalidOperationException("JWT secret not configured")
-);
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.SaveToken = true;
-        options.RequireHttpsMetadata = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSection["Issuer"],
-            ValidAudience = jwtSection["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ClockSkew = TimeSpan.Zero
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnAuthenticationFailed = context =>
-            {
-                Console.WriteLine("Auth failed: " + context.Exception.Message);
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = context =>
-            {
-                Console.WriteLine("Token validated: " + context.SecurityToken);
-                return Task.CompletedTask;
-            },
-            OnChallenge = context =>
-            {
-                Console.WriteLine("Challenge: " + context.Error);
-                return Task.CompletedTask;
-            }
-        };
-    });
-
-builder.Services.AddAuthorization();
-
-// Application services
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddHostedService<NotificationHostedService>();
 
 var app = builder.Build();
 
+// 9) Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EventHub API V1");
-        c.DefaultModelsExpandDepth(-1);
-        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
-    });
+    app.UseSwaggerUI();
 }
 
+// Enable the CORS policy we just created
 app.UseCors("AllowFrontend");
-app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Ensure JSON header
+app.Use(async (ctx, next) =>
+{
+    await next();
+    if (!ctx.Response.Headers.ContainsKey("Content-Type"))
+        ctx.Response.Headers["Content-Type"] = "application/json; charset=utf-8";
+});
+
 app.MapControllers();
 
-// Seed database
+app.UseHttpsRedirection();
+
+// Initialize Owner if not exists
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    context.Database.Migrate();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<Role>>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    // 1) Seed roles
-    var requiredRoles = new[] { "Admin", "User", "Organizer", "SeniorAdmin", "Owner" };
-    foreach (var roleName in requiredRoles)
+    try
     {
-        if (!context.Roles.Any(r => r.Name == roleName))
+        // Ensure Owner role exists
+        if (!await roleManager.RoleExistsAsync("Owner"))
         {
-            context.Roles.Add(new EventHub.Models.Role
-            {
-                Name = roleName,
-                UserRoles = new List<EventHub.Models.UserRole>()
-            });
+            await roleManager.CreateAsync(new Role { Name = "Owner" });
+            logger.LogInformation("Owner role created");
         }
-    }
-    context.SaveChanges();
 
-    // 2) Seed test users and assign roles
-    var testUsers = new[]
-    {
-        new { Email = "123@mail.ru", Password = "123", RoleName = "Admin" },
-        new { Email = "12@mail.ru", Password = "12", RoleName = "Organizer" },
-        new { Email = "2@gmail.com", Password = "12", RoleName = "SeniorAdmin" },
-        new { Email = "3@gmail.com", Password = "1", RoleName = "Owner" }
-    };
-
-    foreach (var tu in testUsers)
-    {
-        var user = context.Users
-            .Include(u => u.UserRoles)
-            .FirstOrDefault(u => u.Email == tu.Email);
-
-        if (user == null)
+        // Check if Owner user exists
+        var owner = await userManager.FindByEmailAsync("owner@eventhub.com");
+        if (owner == null)
         {
-            using var hmac = new HMACSHA512();
-            user = new EventHub.Models.User
+            // Create Owner user
+            owner = new User
             {
-                Email = tu.Email,
-                PasswordHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(tu.Password)),
-                PasswordSalt = hmac.Key
+                UserName = "owner@eventhub.com",
+                Email = "owner@eventhub.com",
+                Name = "System Owner",
+                EmailConfirmed = true
             };
-            context.Users.Add(user);
-            context.SaveChanges();
-        }
 
-        var role = context.Roles.Single(r => r.Name == tu.RoleName);
-        var hasRole = context.UserRoles
-            .Any(ur => ur.UserId == user.Id && ur.RoleId == role.Id);
-        if (!hasRole)
-        {
-            context.UserRoles.Add(new EventHub.Models.UserRole
+            var result = await userManager.CreateAsync(owner, "Password123!");
+            if (result.Succeeded)
             {
-                UserId = user.Id,
-                RoleId = role.Id
-            });
-            context.SaveChanges();
+                await userManager.AddToRoleAsync(owner, "Owner");
+                logger.LogInformation("Owner user created successfully");
+            }
+            else
+            {
+                logger.LogError($"Failed to create Owner user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            }
+        }
+        else
+        {
+            // Ensure Owner has Owner role
+            var roles = await userManager.GetRolesAsync(owner);
+            if (!roles.Contains("Owner"))
+            {
+                await userManager.AddToRoleAsync(owner, "Owner");
+                logger.LogInformation("Owner role assigned to existing user");
+            }
         }
     }
-
-    // 3) Optionally remove default admin
-    var defaultAdmin = context.Users.SingleOrDefault(u => u.Email == "admin@eventhub.com");
-    if (defaultAdmin != null)
+    catch (Exception ex)
     {
-        var adminRoles = context.UserRoles.Where(ur => ur.UserId == defaultAdmin.Id);
-        context.UserRoles.RemoveRange(adminRoles);
-        context.Users.Remove(defaultAdmin);
-        context.SaveChanges();
+        logger.LogError(ex, "Error during Owner initialization");
     }
 }
 
