@@ -802,5 +802,96 @@ namespace EventHub.Controllers
                 return StatusCode(500, new { message = "Error occurred while getting dashboard stats", error = ex.Message });
             }
         }
+
+        /// <summary>
+        /// PUT: api/User/preferred-language
+        /// Updates the user's preferred language for notifications
+        /// </summary>
+        [HttpPut("preferred-language")]
+        [Authorize]
+        public async Task<IActionResult> UpdatePreferredLanguage([FromBody] string language)
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return NotFound();
+
+            user.PreferredLanguage = language;
+            await _userManager.UpdateAsync(user);
+            return Ok(new { preferredLanguage = language });
+        }
+
+        [HttpGet("{userId:int}/planned-events")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> GetUserPlannedEvents(int userId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            if (pageNumber <= 0 || pageSize <= 0)
+                return BadRequest("Invalid pagination parameters.");
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+                return NotFound("User not found");
+
+            var query = _db.PlannedEvents
+                .Where(pe => pe.UserId == userId)
+                .Include(pe => pe.Event)
+                .OrderByDescending(pe => pe.CreatedAt);
+
+            var totalCount = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            var plannedEvents = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(pe => new
+                {
+                    pe.Id,
+                    pe.EventId,
+                    pe.CreatedAt,
+                    Event = new
+                    {
+                        pe.Event.Id,
+                        pe.Event.Title,
+                        pe.Event.Description,
+                        pe.Event.Location,
+                        pe.Event.StartDate,
+                        pe.Event.EndDate,
+                        pe.Event.MaxParticipants,
+                        pe.Event.Category,
+                        pe.Event.CreatorId
+                    }
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                Items = plannedEvents,
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                PageNumber = pageNumber,
+                PageSize = pageSize
+            });
+        }
+
+        [HttpDelete("{userId:int}/planned-events/{eventId:int}")]
+        [Authorize(Roles = "Admin,SeniorAdmin,Owner")]
+        public async Task<IActionResult> RemoveUserFromPlannedEvent(int userId, int eventId)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null)
+                return NotFound("User not found");
+
+            var plannedEvent = await _db.PlannedEvents
+                .FirstOrDefaultAsync(pe => pe.UserId == userId && pe.EventId == eventId);
+
+            if (plannedEvent == null)
+                return NotFound("Planned event not found");
+
+            _db.PlannedEvents.Remove(plannedEvent);
+            await _db.SaveChangesAsync();
+
+            return Ok(new { message = "User removed from planned event successfully" });
+        }
     }
 }

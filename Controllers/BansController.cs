@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +8,7 @@ using EventHub.Data;
 using EventHub.Models;
 using EventHub.Models.DTOs;
 using EventHub.Services;
+using Telegram.Bot;
 
 namespace EventHub.Controllers
 {
@@ -19,6 +21,7 @@ namespace EventHub.Controllers
         private readonly UserManager<User> _userManager;
         private readonly IActivityLogService _activityLogService;
         private readonly ILogger<BansController> _logger;
+        private readonly ITelegramBotClient _bot;
 
         private static readonly Dictionary<string, int> RoleHierarchy = new()
         {
@@ -33,12 +36,14 @@ namespace EventHub.Controllers
             EventHubDbContext db,
             UserManager<User> userManager,
             IActivityLogService activityLogService,
-            ILogger<BansController> logger)
+            ILogger<BansController> logger,
+            ITelegramBotClient bot)
         {
             _db = db;
             _userManager = userManager;
             _activityLogService = activityLogService;
             _logger = logger;
+            _bot = bot;
         }
 
         [HttpPost("{userId:int}")]
@@ -93,6 +98,32 @@ namespace EventHub.Controllers
                 }
             }
             await _db.SaveChangesAsync();
+            
+            // Отправляем уведомление в Telegram если пользователь забанен и у него есть Telegram
+            if (dto.IsBanned && targetUser.TelegramId.HasValue && targetUser.IsTelegramVerified)
+            {
+                try
+                {
+                    var adminName = currentUser.Name ?? "Администратор";
+                    var reason = entry.Reason ?? "не указана";
+                    var support = "Если вы считаете, что это ошибка — обратитесь в поддержку.";
+
+                    var text = $"Вас забанил администратор {adminName}.\n" +
+                               $"Тип: БАН\n" +
+                               $"Причина: {reason}\n" +
+                               $"До: навсегда (GMT+4)\n\n" +
+                               $"{support}";
+
+                    await _bot.SendTextMessageAsync(
+                        chatId: targetUser.TelegramId.Value,
+                        text: text
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Ошибка отправки Telegram уведомления о бане: " + ex.Message);
+                }
+            }
             
             // Логируем действие
             await _activityLogService.LogUserActivityAsync(
@@ -160,7 +191,34 @@ namespace EventHub.Controllers
             }
             await _db.SaveChangesAsync();
             
-            // Логируем действие
+            // Отправляем уведомление в Telegram если у пользователя есть Telegram
+            if (targetUser.TelegramId.HasValue && targetUser.IsTelegramVerified)
+            {
+                try
+                {
+                    var until = banUntil.ToUniversalTime().AddHours(4); // GMT+4
+                    var untilStr = until.ToString("dd.MM.yyyy HH:mm");
+                    var adminName = currentUser.Name ?? "Администратор";
+                    var reason = entry.Reason ?? "не указана";
+                    var support = "Если вы считаете, что это ошибка — обратитесь в поддержку.";
+
+                    var text = $"Вас забанил администратор {adminName}.\n" +
+                               $"Тип: БАН\n" +
+                               $"Причина: {reason}\n" +
+                               $"До: {untilStr} (GMT+4)\n\n" +
+                               $"{support}";
+
+                    await _bot.SendTextMessageAsync(
+                        chatId: targetUser.TelegramId.Value,
+                        text: text
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Ошибка отправки Telegram уведомления о временном бане: " + ex.Message);
+                }
+            }
+            
             await _activityLogService.LogUserActivityAsync(
                 currentUserId,
                 "USER_BANNED_TEMPORARY",

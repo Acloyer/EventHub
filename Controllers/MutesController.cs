@@ -1,4 +1,5 @@
 // Controllers/MutesController.cs
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using EventHub.Models;
 using System.Security.Claims; 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Telegram.Bot;
 
 namespace EventHub.Controllers
 {
@@ -17,10 +19,12 @@ namespace EventHub.Controllers
     {
         readonly EventHubDbContext _db;
         private readonly UserManager<User> _users;
-        public MutesController(EventHubDbContext db, UserManager<User> users)
+        private readonly ITelegramBotClient _bot;
+        public MutesController(EventHubDbContext db, UserManager<User> users, ITelegramBotClient bot)
         {
             _db = db;
             _users = users;
+            _bot = bot;
         }
 
         [HttpPost, Authorize(Roles = "Admin,SeniorAdmin,Owner")]
@@ -63,6 +67,32 @@ namespace EventHub.Controllers
                 }
             }
             await _db.SaveChangesAsync();
+            
+            // Отправляем уведомление в Telegram если пользователь замучен и у него есть Telegram
+            if (dto.IsMuted && targetUser.TelegramId.HasValue && targetUser.IsTelegramVerified)
+            {
+                try
+                {
+                    var adminName = currentUser.Name ?? "Администратор";
+                    var support = "Если вы считаете, что это ошибка — обратитесь в поддержку.";
+
+                    var text = $"Вас замутил администратор {adminName}.\n" +
+                               $"Тип: МУТ\n" +
+                               $"Причина: не указана\n" +
+                               $"До: навсегда (GMT+4)\n\n" +
+                               $"{support}";
+
+                    await _bot.SendTextMessageAsync(
+                        chatId: targetUser.TelegramId.Value,
+                        text: text
+                    );
+                }
+                catch (Exception ex)
+                {
+                    // Можно добавить логирование
+                    Console.WriteLine($"Ошибка отправки Telegram уведомления о муте: {ex.Message}");
+                }
+            }
             
             if(dto.IsMuted == false){
                 return Ok(new { succeeded = true, message = "User unmuted." });
@@ -109,6 +139,33 @@ namespace EventHub.Controllers
             entry.Until = DateTime.UtcNow.AddSeconds(totalSeconds);
 
             await _db.SaveChangesAsync();
+            
+            // Отправляем уведомление в Telegram если у пользователя есть Telegram
+            if (targetUser.TelegramId.HasValue && targetUser.IsTelegramVerified)
+            {
+                try
+                {
+                    var until = entry.Until?.ToUniversalTime().AddHours(4); // GMT+4
+                    var untilStr = until?.ToString("dd.MM.yyyy HH:mm") ?? "навсегда";
+                    var adminName = currentUser.Name ?? "Администратор";
+                    var support = "Если вы считаете, что это ошибка — обратитесь в поддержку.";
+
+                    var text = $"Вас замутил администратор {adminName}.\n" +
+                               $"Тип: МУТ\n" +
+                               $"Причина: не указана\n" +
+                               $"До: {untilStr} (GMT+4)\n\n" +
+                               $"{support}";
+
+                    await _bot.SendTextMessageAsync(
+                        chatId: targetUser.TelegramId.Value,
+                        text: text
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка отправки Telegram уведомления о временном муте: {ex.Message}");
+                }
+            }
 
             var totalMinutes = totalSeconds / 60;
             var hours = totalMinutes / 60;

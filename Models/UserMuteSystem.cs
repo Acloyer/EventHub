@@ -9,6 +9,6 @@ namespace EventHub.Models
         public bool     IsMuted  { get; set; }
         public DateTime? MuteUntil { get; set; }
 
-        public User     User     { get; set; }
+        public User     User     { get; set; } = null!;
     }
 }

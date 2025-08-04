@@ -13,7 +13,6 @@ namespace EventHub.Services
 {
     public class JwtService
     {
-        private readonly JwtSettings _jwtSettings;
         private readonly JwtOptions _options;
         private readonly byte[] _keyBytes;
 

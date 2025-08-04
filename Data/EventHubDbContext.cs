@@ -7,7 +7,7 @@ namespace EventHub.Data
 {
     public class EventHubDbContext : IdentityDbContext<User, Role, int>
     {
-        public DbSet<Role> Roles { get; set; }
+        public new DbSet<Role> Roles { get; set; }
         public DbSet<Event> Events { get; set; }
         public DbSet<FavoriteEvent> FavoriteEvents { get; set; }
         public DbSet<PlannedEvent>  PlannedEvents  { get; set; }

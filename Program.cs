@@ -72,6 +72,7 @@ builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddSingleton<NotificationLocalizationService>();
 builder.Services.AddHostedService<NotificationHostedService>();
 
 // 6) CORS: allow only frontend and cookies

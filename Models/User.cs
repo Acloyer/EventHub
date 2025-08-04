@@ -14,6 +14,7 @@ namespace EventHub.Models
         public int? TelegramCode { get; set; }
         public bool IsTelegramVerified { get; set; }
         public bool NotifyBeforeEvent { get; set; } = true;
+        public string PreferredLanguage { get; set; } = "en";
         public virtual ICollection<FavoriteEvent> FavoriteEvents { get; set; } = new List<FavoriteEvent>();
         public virtual ICollection<PlannedEvent> PlannedEvents { get; set; } = new List<PlannedEvent>();
         public virtual ICollection<Event> CreatedEvents { get; set; } = new List<Event>();

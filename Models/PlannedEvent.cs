@@ -2,6 +2,7 @@
 
 public class PlannedEvent
 {
+    public int Id { get; set; } // Уникальный идентификатор
     public int UserId { get; set; }
     public int EventId { get; set; }
     public DateTime? CreatedAt { get; set; }

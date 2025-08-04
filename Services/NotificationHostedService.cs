@@ -15,43 +15,54 @@ namespace EventHub.Services
     {
         private readonly IServiceProvider _services;
         private readonly ITelegramBotClient _bot;
+        private readonly NotificationLocalizationService _localizationService;
 
-        public NotificationHostedService(IServiceProvider services, ITelegramBotClient bot)
+        public NotificationHostedService(IServiceProvider services, ITelegramBotClient bot, NotificationLocalizationService localizationService)
         {
             _services = services;
             _bot = bot;
+            _localizationService = localizationService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = _services.CreateScope();
-                var db = scope.ServiceProvider.GetRequiredService<EventHubDbContext>();
-
-                var now = DateTime.UtcNow;
-                var upcomingTime = now.AddMinutes(30);
-
-                var due = db.PlannedEvents
-                    .Where(pe =>
-                        pe.User.NotifyBeforeEvent &&
-                        pe.User.IsTelegramVerified &&
-                        pe.User.TelegramId.HasValue &&
-                        pe.Event.StartDate >= now &&
-                        pe.Event.StartDate <= upcomingTime)
-                    .Include(pe => pe.User)
-                    .Include(pe => pe.Event)
-                    .ToList();
-
-                foreach (var pe in due)
+                try
                 {
-                    var chatId = pe.User.TelegramId.Value;
-                    var text = $"Reminder: event \"{pe.Event.Title}\" starts at {pe.Event.StartDate:HH:mm}";
+                    using var scope = _services.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<EventHubDbContext>();
 
-                    await _bot.SendTextMessageAsync(
-                        chatId: chatId,
-                        text: text,
-                        cancellationToken: stoppingToken);
+                    var now = DateTime.UtcNow;
+                    var upcomingTime = now.AddMinutes(30);
+
+                    var due = db.PlannedEvents
+                        .Where(pe =>
+                            pe.User.NotifyBeforeEvent &&
+                            pe.User.IsTelegramVerified &&
+                            pe.User.TelegramId.HasValue &&
+                            pe.Event.StartDate >= now &&
+                            pe.Event.StartDate <= upcomingTime)
+                        .Include(pe => pe.User)
+                        .Include(pe => pe.Event)
+                        .ToList();
+
+                    foreach (var pe in due)
+                    {
+                        var chatId = pe.User.TelegramId.Value;
+                        var userLanguage = pe.User.PreferredLanguage ?? "en";
+                        var text = _localizationService.GetEventReminderMessage(userLanguage, pe.Event.Title, pe.Event.StartDate);
+
+                        await _bot.SendTextMessageAsync(
+                            chatId: chatId,
+                            text: text,
+                            cancellationToken: stoppingToken);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Логируем ошибку, но не останавливаем сервис
+                    Console.WriteLine($"NotificationHostedService error: {ex.Message}");
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
